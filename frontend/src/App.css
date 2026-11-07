@@ -1,0 +1,174 @@
+/* ==========================================================================
+   Standalone App Shell — 《天宫弈 · 南天门守卫战》
+   ========================================================================== */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #120E1E;
+  color: #F5F0E6;
+  font-family: var(--font-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif);
+  -webkit-font-smoothing: antialiased;
+}
+
+.brush {
+  font-family: var(--font-brush, "Ma Shan Zheng", "STKaiti", "KaiTi", serif);
+}
+
+.tg-app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.tg-top-header {
+  position: relative;
+  z-index: 10;
+  max-width: 540px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 10px 14px 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tg-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tg-brand-seal {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: radial-gradient(circle at 35% 30%, #FFF5D6 0%, #F0CF86 45%, #CF3B2E 100%);
+  border: 1.5px solid #FFF8E7;
+  box-shadow: 0 3px 12px rgba(240, 207, 134, 0.45);
+  color: #7A1912;
+  font-size: 22px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tg-brand-title {
+  margin: 0;
+  font-size: 20px;
+  color: #FFF5D6;
+  letter-spacing: 0.03em;
+  line-height: 1.15;
+}
+
+.tg-brand-sub {
+  font-size: 11px;
+  color: #CFC8BC;
+}
+
+.tg-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tg-hdr-btn {
+  min-height: 36px;
+  padding: 6px 11px;
+  border-radius: 10px;
+  background: rgba(42, 34, 62, 0.9);
+  border: 1px solid rgba(240, 207, 134, 0.4);
+  color: #F0CF86;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tg-hdr-btn.icon-only {
+  padding: 6px 9px;
+}
+
+.tg-main-stage {
+  flex: 1;
+}
+
+/*TiltStage base rules*/
+.tilt-stage {
+  margin: 0 auto;
+}
+.tilt-stage-board {
+  transition: transform 0.25s ease;
+}
+
+/* Codex Modal List */
+.tg-codex-box {
+  max-height: 86vh;
+  overflow-y: auto;
+}
+
+.tg-codex-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+  text-align: left;
+}
+
+.tg-codex-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(18, 14, 28, 0.72);
+  border: 1px solid rgba(240, 207, 134, 0.22);
+}
+
+.tg-codex-glyph {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid #F0CF86;
+  background: rgba(255, 248, 230, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.tg-codex-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tg-codex-name {
+  font-size: 12px;
+  color: #E2DDD5;
+  font-weight: 600;
+}
+
+.tg-codex-t3 {
+  color: #F0CF86;
+  font-weight: 800;
+}
+
+.tg-codex-role {
+  font-size: 11px;
+  color: #9BF0D6;
+}
+
+.tg-codex-ult {
+  font-size: 11px;
+  color: #CFC8BC;
+}
