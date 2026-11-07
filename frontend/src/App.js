@@ -2,6 +2,7 @@ import React, { Component } from 'react';
 import './App.css';
 import TiangongTD from './TiangongTD';
 import { Icon } from './components/Icon';
+import { DeityChibi } from './components/ChibiAvatar';
 import { TOWER_TYPES, TOWER_KEYS } from './data/tiangongAssets';
 import { isMuted, toggleMuted, onMutedChange, initSound, playSound, SOUND } from './services/SoundService';
 
@@ -89,12 +90,7 @@ class App extends Component {
                   const t3 = t.tiers[3];
                   return (
                     <div key={key} className="tg-codex-item">
-                      <div
-                        className="tg-codex-glyph brush"
-                        style={{ borderColor: t.color, color: t.color }}
-                      >
-                        {t.glyph}
-                      </div>
+                      <DeityChibi type={key} star={3} size={50} />
                       <div className="tg-codex-meta">
                         <div className="tg-codex-name">
                           1★ {t.tiers[1].name} → 2★ {t.tiers[2].name} →{' '}

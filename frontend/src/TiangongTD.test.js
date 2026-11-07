@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { act } from 'react-dom/test-utils';
-import TiangongTD, { isDeployableCell } from './TiangongTD';
+import TiangongTD, { isDeployableCell, hasCannonMount, isKnightJump } from './TiangongTD';
 import { CELESTIAL_DECREES } from './data/tiangongAssets';
 
 describe('TiangongTD (天宫弈 · 南天门守卫战)', () => {
@@ -31,12 +31,46 @@ describe('TiangongTD (天宫弈 · 南天门守卫战)', () => {
     expect(container.textContent).toContain('南天门');
   });
 
-  test('isDeployableCell forbids river row, spawn row, and Nantianmen core cell', () => {
+  test('isDeployableCell, hasCannonMount, and isKnightJump follow Xiangqi rules', () => {
     expect(isDeployableCell(0, 2)).toBe(false);
     expect(isDeployableCell(3, 2)).toBe(false);
     expect(isDeployableCell(7, 3)).toBe(false);
     expect(isDeployableCell(2, 3)).toBe(true);
     expect(isDeployableCell(5, 4)).toBe(true);
+
+    // Cannon Screen-Mount (隔山架炮): 車 at (4,3) in front of 炮 at (5,3)
+    const pao = { id: 'p1', type: 'pao', row: 5, col: 3 };
+    const mount = { id: 'c1', type: 'che', row: 4, col: 3 };
+    expect(hasCannonMount(pao, [pao, mount])).toBe(true);
+    expect(hasCannonMount(pao, [pao])).toBe(false);
+
+    // Knight "日"-jump
+    expect(isKnightJump(4, 3, 2, 2)).toBe(true);
+    expect(isKnightJump(4, 3, 4, 5)).toBe(false);
+  });
+
+  test('opens 玩法教学 guide modal and fires 炮 targeted Samadhi Fire Lotus zone', () => {
+    const ref = React.createRef();
+    act(() => {
+      ReactDOM.render(<TiangongTD ref={ref} />, container);
+    });
+
+    const guideBtn = container.querySelector('[data-testid="tg-guide-btn"]');
+    act(() => {
+      guideBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('[data-testid="tg-guide-modal"]')).not.toBeNull();
+
+    // Select starter 炮 at (5, 3) and fire a Samadhi Fire Lotus zone at (2, 3)
+    const paoTower = ref.current.state.towers.find((t) => t.type === 'pao');
+    act(() => {
+      ref.current.setState({ selectedTowerId: paoTower.id, showGuideModal: false, cannonAimMode: true });
+    });
+    const targetCell = container.querySelector('[data-testid="tg-cell-2-3"]');
+    act(() => {
+      targetCell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(ref.current.state.fireZones.length).toBeGreaterThan(0);
   });
 
   test('summoning a tower spends Spirit Stones and increases tower count', () => {
