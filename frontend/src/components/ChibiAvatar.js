@@ -248,3 +248,30 @@ export function DemonChibi({ glyph, isBoss = false }) {
     </div>
   );
 }
+
+/**
+ * Q-version Taibai Jinxing (太白金星) Tutorial Mentor Avatar
+ */
+export function MentorChibi({ size = 48 }) {
+  return (
+    <div className="chibi-mentor" style={{ width: size, height: size }}>
+      <svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true">
+        <circle cx="32" cy="32" r="29" fill="#2A1F3D" stroke="#F0CF86" strokeWidth="2.2" />
+        {/* White Immortal Robe */}
+        <path d="M16 44 Q32 38 48 44 L51 58 L13 58 Z" fill="#F8FAFC" stroke="#F0CF86" strokeWidth="1.5" />
+        {/* Head */}
+        <circle cx="32" cy="27" r="12.5" fill="#FFE4C4" stroke="#78350F" strokeWidth="1.2" />
+        {/* White Hair & Golden Lotus Crown */}
+        <path d="M19 23 Q22 11 32 11 Q42 11 45 23 Z" fill="#F1F5F9" stroke="#CBD5E1" strokeWidth="1" />
+        <polygon points="32,5 27,13 37,13" fill="#FACC15" stroke="#92400E" strokeWidth="1" />
+        {/* Long White Eyebrows */}
+        <path d="M22 22 Q27 19 30 22 M34 22 Q37 19 42 22" fill="none" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" />
+        {/* Kind Smiling Eyes */}
+        <path d="M25 26 Q27.5 24 30 26 M34 26 Q36.5 24 39 26" fill="none" stroke="#1E293B" strokeWidth="1.8" strokeLinecap="round" />
+        {/* Fluffy White Beard */}
+        <path d="M23 32 Q32 52 41 32 Q32 36 23 32 Z" fill="#FFFFFF" stroke="#E2E8F0" strokeWidth="1.2" />
+      </svg>
+    </div>
+  );
+}
+

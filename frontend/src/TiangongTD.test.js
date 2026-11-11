@@ -8,6 +8,7 @@ describe('TiangongTD (天宫弈 · 南天门守卫战)', () => {
   let container;
 
   beforeEach(() => {
+    localStorage.clear();
     container = document.createElement('div');
     document.body.appendChild(container);
   });
@@ -134,5 +135,75 @@ describe('TiangongTD (天宫弈 · 南天门守卫战)', () => {
     expect(ref.current.state.waveIndex).toBe(1);
     expect(ref.current.state.activeDecrees).toContain('sadou_chengbing');
     expect(container.querySelector('[data-testid="tg-stones"]').textContent).toContain('230');
+  });
+
+  test('completes full 5-step hands-on interactive tutorial from Step 1 to Graduation', () => {
+    const ref = React.createRef();
+    act(() => {
+      ReactDOM.render(<TiangongTD ref={ref} />, container);
+    });
+
+    // Auto-starts at Step 1 on first visit
+    expect(ref.current.state.tutorialStep).toBe(1);
+    expect(container.querySelector('[data-testid="tg-tutorial-card"]')).not.toBeNull();
+    expect(container.textContent).toContain('第 1/5 步');
+
+    // Step 1: Click 敕令募兵 -> advances to Step 2
+    const summonBtn = container.querySelector('[data-testid="tg-summon-btn"]');
+    act(() => {
+      summonBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(ref.current.state.tutorialStep).toBe(2);
+    expect(container.textContent).toContain('第 2/5 步');
+
+    // Step 2: Click 一键合阵 -> merges two 1★ 車 into 2★ 車 and advances to Step 3
+    const mergeBtn = container.querySelector('[data-testid="tg-merge-btn"]');
+    expect(mergeBtn.disabled).toBe(false);
+    act(() => {
+      mergeBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(ref.current.state.tutorialStep).toBe(3);
+    expect(container.textContent).toContain('第 3/5 步');
+
+    // Step 3: Click highlighted cell (2, 3) to dash-charge 車 -> advances to Step 4
+    const dashCell = container.querySelector('[data-testid="tg-cell-2-3"]');
+    act(() => {
+      dashCell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(ref.current.state.tutorialStep).toBe(4);
+    expect(container.textContent).toContain('第 4/5 步');
+
+    // Step 4: Click highlighted River cell (3, 3) to drop 炮 Samadhi Fire Sea -> advances to Step 5 with 100% ult
+    const riverCell = container.querySelector('[data-testid="tg-cell-3-3"]');
+    act(() => {
+      riverCell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(ref.current.state.tutorialStep).toBe(5);
+    expect(ref.current.state.ultCharge).toBe(100);
+    expect(container.textContent).toContain('第 5/5 步');
+
+    // Step 5: Click 诛仙剑阵 ultimate -> finishes tutorial and persists completion!
+    const ultBtn = container.querySelector('[data-testid="tg-ult-btn"]');
+    expect(ultBtn.disabled).toBe(false);
+    act(() => {
+      ultBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(ref.current.state.tutorialStep).toBeNull();
+    expect(container.querySelector('[data-testid="tg-tutorial-card"]')).toBeNull();
+    expect(localStorage.getItem('tiangong_tutorial_v2_done')).toBe('1');
+
+    // Can re-trigger tutorial anytime via 👆 新手引导 button
+    const replayBtn = container.querySelector('[data-testid="tg-start-tutorial-btn"]');
+    act(() => {
+      replayBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(ref.current.state.tutorialStep).toBe(1);
+
+    // Can skip tutorial anytime via 跳过引导 × button
+    const skipBtn = container.querySelector('[data-testid="tg-skip-tutorial-btn"]');
+    act(() => {
+      skipBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(ref.current.state.tutorialStep).toBeNull();
   });
 });

@@ -977,6 +977,148 @@
   animation: tgPulseBtn 0.9s ease-in-out infinite alternate;
 }
 
+/* ---- Hands-on Interactive Tutorial (太白金星 5步手把手教学) ---- */
+.tg-tutorial-card {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  background: linear-gradient(135deg, rgba(58, 34, 24, 0.96) 0%, rgba(35, 24, 52, 0.98) 100%);
+  border: 2px solid #FACC15;
+  border-radius: 16px;
+  padding: 10px 12px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.65), 0 0 22px rgba(250, 204, 21, 0.35);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 25;
+}
+
+.chibi-mentor {
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+}
+
+.tg-tut-body {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.tg-tut-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.tg-tut-step-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 900;
+  color: #FDE047;
+}
+
+.tg-tut-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.tg-tut-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.tg-tut-dot.done {
+  background: #52C4A3;
+}
+
+.tg-tut-dot.current {
+  background: #FACC15;
+  box-shadow: 0 0 6px #FACC15;
+  transform: scale(1.25);
+}
+
+.tg-tut-skip {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(240, 207, 134, 0.35);
+  color: #CFC8BC;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tg-tut-skip:hover {
+  color: #FFF;
+  border-color: #FACC15;
+}
+
+.tg-tut-text {
+  font-size: 12.5px;
+  line-height: 1.42;
+  color: #FFFDF7;
+  font-weight: 600;
+}
+
+.tg-tut-text strong {
+  color: #FDE047;
+}
+
+/* Spotlight & Bouncing Finger Pointer on Target Button / Cell */
+.tg-tut-target {
+  position: relative !important;
+  z-index: 30 !important;
+  outline: 3px solid #FACC15 !important;
+  box-shadow: 0 0 0 4px rgba(250, 204, 21, 0.32), 0 0 24px rgba(250, 204, 21, 0.9) !important;
+  animation: tgTutGlow 0.85s ease-in-out infinite alternate !important;
+}
+
+@keyframes tgTutGlow {
+  from { transform: scale(1); }
+  to { transform: scale(1.04); }
+}
+
+.tg-finger-pointer {
+  position: absolute;
+  left: 50%;
+  top: -34px;
+  transform: translateX(-50%);
+  z-index: 40;
+  background: linear-gradient(135deg, #FACC15, #EA580C);
+  color: #1C1206;
+  border: 1.5px solid #FFFBEB;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.75);
+  animation: tgFingerBounce 0.7s ease-in-out infinite alternate;
+}
+
+.tg-finger-pointer::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px 5px 0 5px;
+  border-style: solid;
+  border-color: #EA580C transparent transparent transparent;
+}
+
+@keyframes tgFingerBounce {
+  from { transform: translate(-50%, 0); }
+  to { transform: translate(-50%, -7px); }
+}
+
 @keyframes tgPulseBtn {
   from { filter: brightness(1); transform: scale(1); }
   to { filter: brightness(1.18); transform: scale(1.02); }

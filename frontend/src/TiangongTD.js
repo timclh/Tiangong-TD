@@ -19,7 +19,7 @@ import React, { Component } from 'react';
 import './TiangongTD.css';
 import TiltStage from './components/TiltStage';
 import { Icon } from './components/Icon';
-import { DeityChibi, DemonChibi } from './components/ChibiAvatar';
+import { DeityChibi, DemonChibi, MentorChibi } from './components/ChibiAvatar';
 import {
   GRID_COLS,
   GRID_ROWS,
@@ -37,6 +37,56 @@ import { boardTiltDegrees } from './services/ViewportService';
 
 const TICK_MS = 80;
 const BASE_SUMMON_COST = 40;
+const TUTORIAL_STORAGE_KEY = 'tiangong_tutorial_v2_done';
+
+function isTutorialCompletedStorage() {
+  try {
+    return localStorage.getItem(TUTORIAL_STORAGE_KEY) === '1';
+  } catch (_) {
+    return false;
+  }
+}
+
+function markTutorialCompletedStorage() {
+  try {
+    localStorage.setItem(TUTORIAL_STORAGE_KEY, '1');
+  } catch (_) {
+    // ignore storage errors in private mode
+  }
+}
+
+export const TUTORIAL_STEPS = {
+  1: {
+    step: 1,
+    title: '第 1/5 步 · 敕令募兵',
+    body: '仙长！妖魔正从上方裂隙杀向底部【南天门】！请点击下方闪烁的红色【敕令募兵】，花 40 仙灵石召唤新神将！',
+    pointerText: '👆 点这里募兵!',
+  },
+  2: {
+    step: 2,
+    title: '第 2/5 步 · 同名合体升星',
+    body: '妙哉！场上有了两尊相同的【1★ 車·雷震子】！请点击下方绿色【一键合阵】，将他们合体进化为 2★ 神将！',
+    pointerText: '👆 点这里合体升2★!',
+  },
+  3: {
+    step: 3,
+    title: '第 3/5 步 · 操控【車】十字雷车冲刺',
+    body: '【車】会自动发射十字天雷劈穿同行同列！现在点击棋盘上闪烁的格子，发动【⚡雷车冲刺】直线突进痛击前排小妖！',
+    pointerText: '👆 点此格雷车冲刺!',
+  },
+  4: {
+    step: 4,
+    title: '第 4/5 步 · 操控【炮】隔山架炮 & 火海',
+    body: '看！【炮·哪吒】正前方有【車】充当炮架，自动激活【🔥架炮×1.8倍重伤】！点击棋盘中间【天河】格，轰出一片三昧火海！',
+    pointerText: '👆 点此轰出火海!',
+  },
+  5: {
+    step: 5,
+    title: '第 5/5 步 · 释放全屏大招【诛仙剑阵】',
+    body: '大功告成！杀怪满100%仙力可放大招；两尊2★合体还能召唤【3★法天象地】真神！点击右下角【诛仙剑阵】清场并正式迎敌！',
+    pointerText: '👆 点此释放全屏大招!',
+  },
+};
 
 let nextEntityId = 1;
 function uid(prefix = 'id') {
@@ -90,17 +140,52 @@ class TiangongTD extends Component {
     this.state = this.createInitialState();
   }
 
-  createInitialState() {
+  createInitialState({ forceTutorial = false } = {}) {
+    const startTutorial = forceTutorial || !isTutorialCompletedStorage();
     // Start with 2 pre-deployed 1★ Celestial Towers (車 in front as cannon mount, 炮 behind it!)
     const starterTowers = [
       { id: uid('tw'), type: 'che', star: 1, row: 4, col: 3, lastShotAt: 0, skillReadyAt: 0 },
       { id: uid('tw'), type: 'pao', star: 1, row: 5, col: 3, lastShotAt: 0, skillReadyAt: 0 },
     ];
+    const tutorialDummies = startTutorial
+      ? [
+          {
+            id: uid('em'),
+            name: '试炼魔卒',
+            glyph: '卒',
+            isBoss: false,
+            hp: 260,
+            maxHp: 260,
+            speed: 0.58,
+            reward: 15,
+            col: 3,
+            row: 1.35,
+            slowUntil: 0,
+            burnUntil: 0,
+          },
+          {
+            id: uid('em'),
+            name: '试炼妖骑',
+            glyph: '骑',
+            isBoss: false,
+            hp: 280,
+            maxHp: 280,
+            speed: 0.62,
+            reward: 15,
+            col: 3,
+            row: 3.0,
+            slowUntil: 0,
+            burnUntil: 0,
+          },
+        ]
+      : [];
+
     return {
       boardWidth: computeBoardWidth(),
       tiltEnabled: true,
       speedMultiplier: 1,
       isPaused: false,
+      tutorialStep: startTutorial ? 1 : null, // 1..5 interactive hands-on onboarding
       showGuideModal: false,
       cannonAimMode: false, // when true and a 炮 is selected, next board click bombards that spot!
       waveIndex: 0, // 0-based index into WAVES (0..14)
@@ -113,7 +198,7 @@ class TiangongTD extends Component {
       ultCharge: 45, // 0..100 for 诛仙剑阵
       towers: starterTowers,
       selectedTowerId: starterTowers[0].id, // pre-select 車 so user immediately sees its cross rail & controls!
-      enemies: [],
+      enemies: tutorialDummies,
       spawnQueue: this.buildWaveSpawnQueue(0),
       spawnCooldownMs: 400,
       fireZones: [], // [{ id, row, col, radius, expiresAt }] from 哪吒三昧火莲定点轰炸
@@ -205,6 +290,7 @@ class TiangongTD extends Component {
   tick = () => {
     const {
       isPaused,
+      tutorialStep,
       showGuideModal,
       decreeChoices,
       awakeningCutIn,
@@ -213,6 +299,22 @@ class TiangongTD extends Component {
     } = this.state;
 
     if (isPaused || showGuideModal || decreeChoices || awakeningCutIn || gameResult) {
+      return;
+    }
+
+    // While in the hands-on tutorial, freeze demon marching so the player has zero rush,
+    // and only clean up finished beam/damage animations when needed.
+    if (tutorialStep) {
+      const nowTut = Date.now();
+      if (
+        this.state.fxBeams.some((b) => b.expiresAt <= nowTut) ||
+        this.state.floatTexts.some((f) => f.expiresAt <= nowTut)
+      ) {
+        this.setState((prev) => ({
+          fxBeams: prev.fxBeams.filter((b) => b.expiresAt > nowTut),
+          floatTexts: prev.floatTexts.filter((f) => f.expiresAt > nowTut),
+        }));
+      }
       return;
     }
 
@@ -593,7 +695,7 @@ class TiangongTD extends Component {
 
   summonTower = () => {
     const cost = this.getSummonCost();
-    const { stones, towers, gameResult } = this.state;
+    const { stones, towers, gameResult, tutorialStep } = this.state;
     if (gameResult || stones < cost) return false;
 
     const occupied = new Set(towers.map((t) => `${t.row}-${t.col}`));
@@ -607,8 +709,14 @@ class TiangongTD extends Component {
     }
     if (emptyCells.length === 0) return false;
 
-    const spot = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-    const type = TOWER_KEYS[Math.floor(Math.random() * TOWER_KEYS.length)];
+    // During Step 1 of tutorial, deterministically summon a 1★ 車 at (4, 1) so Step 2 merge is guaranteed!
+    const tutorialSpot =
+      tutorialStep === 1 && !occupied.has('4-1') ? { row: 4, col: 1 } : null;
+    const spot = tutorialSpot || emptyCells[Math.floor(Math.random() * emptyCells.length)];
+    const type =
+      tutorialStep === 1
+        ? 'che'
+        : TOWER_KEYS[Math.floor(Math.random() * TOWER_KEYS.length)];
     const newTower = {
       id: uid('tw'),
       type,
@@ -616,6 +724,7 @@ class TiangongTD extends Component {
       row: spot.row,
       col: spot.col,
       lastShotAt: 0,
+      skillReadyAt: 0,
     };
 
     playSound(SOUND.PLACE);
@@ -626,6 +735,7 @@ class TiangongTD extends Component {
       summonCount: prev.summonCount + 1,
       towers: [...prev.towers, newTower],
       selectedTowerId: newTower.id,
+      tutorialStep: prev.tutorialStep === 1 ? 2 : prev.tutorialStep,
     }));
     return true;
   };
@@ -683,6 +793,7 @@ class TiangongTD extends Component {
         score: prev.score + newStar * 80,
         selectedTowerId: dst.id,
         awakeningCutIn,
+        tutorialStep: prev.tutorialStep === 2 ? 3 : prev.tutorialStep,
       };
     });
 
@@ -699,7 +810,8 @@ class TiangongTD extends Component {
           towers[i].star === towers[j].star &&
           towers[i].star < 3
         ) {
-          pairs.push([towers[i], towers[j]]);
+          // Keep the first tower as destination (`dst`) so starter column formation stays intact
+          pairs.push([towers[j], towers[i]]);
         }
       }
     }
@@ -718,9 +830,10 @@ class TiangongTD extends Component {
   /**
    * Active Tactical Skill for Selected Tower (車雷霆冲刺 / 炮三昧火莲定点轰炸 / 馬哮天跳斩 / 兵宝塔镇压 / 相定海神针)
    */
-  triggerTowerTacticalSkill = (targetRow = null, targetCol = null) => {
-    const { towers, selectedTowerId, enemies } = this.state;
-    const tower = towers.find((t) => t.id === selectedTowerId);
+  triggerTowerTacticalSkill = (targetRow = null, targetCol = null, forcedTowerId = null) => {
+    const { towers, selectedTowerId } = this.state;
+    const activeId = forcedTowerId || selectedTowerId;
+    const tower = towers.find((t) => t.id === activeId);
     if (!tower) return false;
 
     const now = Date.now();
@@ -836,31 +949,80 @@ class TiangongTD extends Component {
         });
       }
 
+      const updatedTowers = nextTowers.map((t) =>
+        t.id === tower.id
+          ? {
+              ...t,
+              row:
+                targetRow !== null &&
+                isDeployableCell(targetRow, targetCol) &&
+                tower.type !== 'pao'
+                  ? targetRow
+                  : t.row,
+              col:
+                targetCol !== null &&
+                isDeployableCell(targetRow, targetCol) &&
+                tower.type !== 'pao'
+                  ? targetCol
+                  : t.col,
+              skillReadyAt: now + 4000,
+            }
+          : t
+      );
+
+      // Tutorial step transitions for Step 3 (車 dash) -> Step 4 (炮 fire sea) -> Step 5 (诛仙剑阵)
+      let nextTutStep = prev.tutorialStep;
+      let nextSelectedId = prev.selectedTowerId;
+      let nextAimMode = false;
+      let nextUltCharge = prev.ultCharge;
+
+      if (prev.tutorialStep === 3 && tower.type === 'che') {
+        nextTutStep = 4;
+        const paoOnBoard = updatedTowers.find((t) => t.type === 'pao');
+        if (paoOnBoard) {
+          nextSelectedId = paoOnBoard.id;
+          nextAimMode = true;
+        }
+      } else if (prev.tutorialStep === 4 && tower.type === 'pao') {
+        nextTutStep = 5;
+        nextUltCharge = 100; // fill ultimate gauge so player experiences 诛仙剑阵!
+      }
+
       return {
-        enemies: nextEnemies,
+        enemies: nextEnemies.filter((e) => e.hp > 0),
         fireZones: nextFireZones,
         fxBeams: nextBeams,
         floatTexts: nextFloats,
-        cannonAimMode: false,
-        towers: nextTowers.map((t) =>
-          t.id === tower.id
-            ? {
-                ...t,
-                row: targetRow !== null && isDeployableCell(targetRow, targetCol) && tower.type !== 'pao' ? targetRow : t.row,
-                col: targetCol !== null && isDeployableCell(targetRow, targetCol) && tower.type !== 'pao' ? targetCol : t.col,
-                skillReadyAt: now + 4000,
-              }
-            : t
-        ),
+        cannonAimMode: nextAimMode,
+        selectedTowerId: nextSelectedId,
+        ultCharge: nextUltCharge,
+        tutorialStep: nextTutStep,
+        towers: updatedTowers,
       };
     });
     return true;
   };
 
   handleCellClick = (row, col) => {
-    const { towers, selectedTowerId, cannonAimMode } = this.state;
+    const { towers, selectedTowerId, cannonAimMode, tutorialStep } = this.state;
     const clickedTower = towers.find((t) => t.row === row && t.col === col);
     const selectedTower = towers.find((t) => t.id === selectedTowerId);
+
+    // Foolproof tutorial assists for Step 3 (車 dash) & Step 4 (炮 fire sea)
+    if (tutorialStep === 3 && !clickedTower && isDeployableCell(row, col)) {
+      const cheTower = towers.find((t) => t.type === 'che');
+      if (cheTower && (row === cheTower.row || col === cheTower.col)) {
+        this.triggerTowerTacticalSkill(row, col, cheTower.id);
+        return;
+      }
+    }
+    if (tutorialStep === 4 && !clickedTower) {
+      const paoTower = towers.find((t) => t.type === 'pao');
+      if (paoTower) {
+        this.triggerTowerTacticalSkill(row, col, paoTower.id);
+        return;
+      }
+    }
 
     // If 炮 (Cannon) is in Bombard Aim Mode, clicking ANY cell launches Samadhi Fire Lotus there!
     if (selectedTower && selectedTower.type === 'pao' && cannonAimMode && !clickedTower) {
@@ -936,26 +1098,64 @@ class TiangongTD extends Component {
     const ultMult = this.hasDecree('lingxiao_jianzhen') ? 1.8 : 1.0;
     const dmg = Math.round(320 * ultMult);
 
-    this.setState((prev) => ({
-      ultCharge: this.hasDecree('lingxiao_jianzhen') ? 25 : 0,
-      enemies: prev.enemies.map((e) => ({
-        ...e,
-        hp: e.hp - dmg,
-        slowUntil: Math.max(e.slowUntil, now + 1800),
-      })),
-      floatTexts: [
-        ...prev.floatTexts,
-        ...enemies.slice(0, 6).map((e) => ({
-          id: uid('flt'),
-          col: e.col,
-          row: e.row,
-          text: `🗡️诛仙 -${dmg}!`,
-          crit: true,
-          expiresAt: now + 650,
-        })),
-      ],
-    }));
+    if (this.state.tutorialStep === 5) {
+      markTutorialCompletedStorage();
+    }
+
+    this.setState((prev) => {
+      const finishingTutorial = prev.tutorialStep === 5;
+      const updatedEnemies = prev.enemies
+        .map((e) => ({
+          ...e,
+          hp: e.hp - dmg,
+          slowUntil: Math.max(e.slowUntil, now + 1800),
+        }))
+        .filter((e) => !finishingTutorial || e.hp > 0);
+
+      return {
+        tutorialStep: finishingTutorial ? null : prev.tutorialStep,
+        ultCharge: this.hasDecree('lingxiao_jianzhen') ? 25 : 0,
+        enemies: updatedEnemies,
+        floatTexts: [
+          ...prev.floatTexts,
+          ...enemies.slice(0, 6).map((e) => ({
+            id: uid('flt'),
+            col: e.col,
+            row: e.row,
+            text: `🗡️诛仙 -${dmg}!`,
+            crit: true,
+            expiresAt: now + 650,
+          })),
+          ...(finishingTutorial
+            ? [
+                {
+                  id: uid('flt'),
+                  col: CORE_POS.col,
+                  row: 3.5,
+                  text: '🎉 新手传功圆满！正式迎战第一波妖军！',
+                  crit: true,
+                  expiresAt: now + 1400,
+                },
+              ]
+            : []),
+        ],
+      };
+    });
     return true;
+  };
+
+  startInteractiveTutorial = () => {
+    playSound(SOUND.SELECT);
+    this.setState(this.createInitialState({ forceTutorial: true }));
+  };
+
+  skipTutorial = () => {
+    markTutorialCompletedStorage();
+    playSound(SOUND.SELECT);
+    this.setState({
+      tutorialStep: null,
+      cannonAimMode: false,
+    });
   };
 
   chooseDecree = (decree) => {
@@ -1003,6 +1203,7 @@ class TiangongTD extends Component {
       tiltEnabled,
       speedMultiplier,
       isPaused,
+      tutorialStep,
       showGuideModal,
       cannonAimMode,
       waveIndex,
@@ -1089,10 +1290,18 @@ class TiangongTD extends Component {
                 <button
                   type="button"
                   className="tg-mini-btn guide-btn"
+                  data-testid="tg-start-tutorial-btn"
+                  onClick={this.startInteractiveTutorial}
+                >
+                  👆 新手引导
+                </button>
+                <button
+                  type="button"
+                  className="tg-mini-btn"
                   data-testid="tg-guide-btn"
                   onClick={() => this.setState({ showGuideModal: true })}
                 >
-                  📖 玩法教学
+                  📖 兵法
                 </button>
                 <button
                   type="button"
@@ -1150,10 +1359,42 @@ class TiangongTD extends Component {
             </div>
           </div>
 
-          {/* Live Interactive Step-by-Step Guide Bar */}
-          <div className="tg-step-guide-bar" data-testid="tg-step-guide">
-            <span>{stepTip}</span>
-          </div>
+          {/* Interactive 5-Step Taibai Jinxing Onboarding Card OR Live Coach Bar */}
+          {tutorialStep && TUTORIAL_STEPS[tutorialStep] ? (
+            <div className="tg-tutorial-card" data-testid="tg-tutorial-card">
+              <MentorChibi size={48} />
+              <div className="tg-tut-body">
+                <div className="tg-tut-header">
+                  <span className="tg-tut-step-badge">
+                    <span>✦ 太白金星传功 · {TUTORIAL_STEPS[tutorialStep].title}</span>
+                    <span className="tg-tut-dots" aria-hidden="true">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <span
+                          key={s}
+                          className={`tg-tut-dot ${
+                            s < tutorialStep ? 'done' : s === tutorialStep ? 'current' : ''
+                          }`}
+                        />
+                      ))}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    className="tg-tut-skip"
+                    data-testid="tg-skip-tutorial-btn"
+                    onClick={this.skipTutorial}
+                  >
+                    跳过引导 ×
+                  </button>
+                </div>
+                <div className="tg-tut-text">{TUTORIAL_STEPS[tutorialStep].body}</div>
+              </div>
+            </div>
+          ) : (
+            <div className="tg-step-guide-bar" data-testid="tg-step-guide">
+              <span>{stepTip}</span>
+            </div>
+          )}
 
           {/* Active Celestial Decrees Strip */}
           {activeDecrees.length > 0 && (
@@ -1240,6 +1481,11 @@ class TiangongTD extends Component {
 
                       const paoMounted = tower ? hasCannonMount(tower, towers) : false;
 
+                      // Spotlight target cell during Tutorial Steps 3 (車 dash) & 4 (炮 fire sea)
+                      const isTutStep3Target = tutorialStep === 3 && r === 2 && c === 3;
+                      const isTutStep4Target = tutorialStep === 4 && r === 3 && c === 3;
+                      const isTutCellTarget = isTutStep3Target || isTutStep4Target;
+
                       return (
                         <div
                           key={`${r}-${c}`}
@@ -1253,11 +1499,17 @@ class TiangongTD extends Component {
                             isMaJump ? 'knight-highlight' : '',
                             isPaoAim ? 'pao-aim-highlight' : '',
                             activeFireHere ? 'burning-cell' : '',
+                            isTutCellTarget ? 'tg-tut-target' : '',
                           ]
                             .filter(Boolean)
                             .join(' ')}
                           onClick={() => this.handleCellClick(r, c)}
                         >
+                          {isTutCellTarget && (
+                            <span className="tg-finger-pointer">
+                              {TUTORIAL_STEPS[tutorialStep].pointerText}
+                            </span>
+                          )}
                           {isCore && (
                             <div className="tg-core-fortress" title="南天门 · 凌霄宝殿">
                               <span className="tg-core-glyph">帥</span>
@@ -1424,11 +1676,22 @@ class TiangongTD extends Component {
             <div className="tg-dock-actions">
               <button
                 type="button"
-                className={`tg-action-btn summon ${stones >= summonCost && towers.length <= 4 ? 'pulse-cta' : ''}`}
+                className={[
+                  'tg-action-btn summon',
+                  stones >= summonCost && towers.length <= 4 ? 'pulse-cta' : '',
+                  tutorialStep === 1 ? 'tg-tut-target' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
                 data-testid="tg-summon-btn"
                 disabled={stones < summonCost}
                 onClick={this.summonTower}
               >
+                {tutorialStep === 1 && (
+                  <span className="tg-finger-pointer">
+                    {TUTORIAL_STEPS[1].pointerText}
+                  </span>
+                )}
                 <span className="tg-btn-main">
                   <Icon name="sparkles" size={15} /> 敕令募兵
                 </span>
@@ -1437,11 +1700,22 @@ class TiangongTD extends Component {
 
               <button
                 type="button"
-                className={`tg-action-btn merge ${mergePairs.length > 0 ? 'pulse-merge' : ''}`}
+                className={[
+                  'tg-action-btn merge',
+                  mergePairs.length > 0 ? 'pulse-merge' : '',
+                  tutorialStep === 2 ? 'tg-tut-target' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
                 data-testid="tg-merge-btn"
                 disabled={mergePairs.length === 0}
                 onClick={this.autoMergePair}
               >
+                {tutorialStep === 2 && (
+                  <span className="tg-finger-pointer">
+                    {TUTORIAL_STEPS[2].pointerText}
+                  </span>
+                )}
                 <span className="tg-btn-main">
                   <Icon name="zap" size={15} /> 一键合阵 ({mergePairs.length})
                 </span>
@@ -1450,11 +1724,22 @@ class TiangongTD extends Component {
 
               <button
                 type="button"
-                className={`tg-action-btn ult ${ultCharge >= 100 ? 'ready' : ''}`}
+                className={[
+                  'tg-action-btn ult',
+                  ultCharge >= 100 ? 'ready' : '',
+                  tutorialStep === 5 ? 'tg-tut-target' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
                 data-testid="tg-ult-btn"
                 disabled={ultCharge < 100}
                 onClick={this.castUltimate}
               >
+                {tutorialStep === 5 && (
+                  <span className="tg-finger-pointer">
+                    {TUTORIAL_STEPS[5].pointerText}
+                  </span>
+                )}
                 <span className="tg-btn-main">
                   <Icon name="crown" size={15} /> 诛仙剑阵
                 </span>
@@ -1600,13 +1885,23 @@ class TiangongTD extends Component {
                 </div>
               </div>
 
-              <button
-                type="button"
-                className="tg-primary-cta"
-                onClick={() => this.setState({ showGuideModal: false })}
-              >
-                明白兵法 · 立即实战
-              </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <button
+                  type="button"
+                  className="tg-primary-cta"
+                  onClick={this.startInteractiveTutorial}
+                >
+                  👆 开启 5 步手把手实战引导（推荐）
+                </button>
+                <button
+                  type="button"
+                  className="tg-mini-btn"
+                  style={{ width: '100%', justifyContent: 'center', minHeight: 38 }}
+                  onClick={() => this.setState({ showGuideModal: false })}
+                >
+                  关闭窗口 · 继续当前战局
+                </button>
+              </div>
             </div>
           </div>
         )}
