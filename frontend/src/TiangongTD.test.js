@@ -39,10 +39,12 @@ describe('TiangongTD (天宫弈 · 南天门守卫战)', () => {
     expect(isDeployableCell(2, 3)).toBe(true);
     expect(isDeployableCell(5, 4)).toBe(true);
 
-    // Cannon Screen-Mount (隔山架炮): 車 at (4,3) in front of 炮 at (5,3)
+    // Cannon Screen-Mount (隔山架炮): strictly SAME column in front!
     const pao = { id: 'p1', type: 'pao', row: 5, col: 3 };
-    const mount = { id: 'c1', type: 'che', row: 4, col: 3 };
-    expect(hasCannonMount(pao, [pao, mount])).toBe(true);
+    const sameColMount = { id: 'c1', type: 'che', row: 4, col: 3 };
+    const wrongColMount = { id: 'c2', type: 'che', row: 4, col: 2 };
+    expect(hasCannonMount(pao, [pao, sameColMount])).toBe(true);
+    expect(hasCannonMount(pao, [pao, wrongColMount])).toBe(false);
     expect(hasCannonMount(pao, [pao])).toBe(false);
 
     // Knight "日"-jump
@@ -205,5 +207,40 @@ describe('TiangongTD (天宫弈 · 南天门守卫战)', () => {
       skipBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(ref.current.state.tutorialStep).toBeNull();
+  });
+
+  test('upgrades Armory weapon skills with silver and claims 8-kill Merit Skill without skipping wave', () => {
+    const ref = React.createRef();
+    act(() => {
+      ReactDOM.render(<TiangongTD ref={ref} />, container);
+    });
+
+    // Click 🧨 火药扩容 upgrade (costs 50 silver: 140 -> 90, Lv.1 -> Lv.2)
+    const gpBtn = container.querySelector('[data-testid="tg-upg-gunpowder"]');
+    expect(gpBtn.disabled).toBe(false);
+    act(() => {
+      gpBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(ref.current.state.armory.gunpowder).toBe(2);
+    expect(container.querySelector('[data-testid="tg-stones"]').textContent).toContain('90');
+
+    // Grant 1 pending merit skill (from 8 kills) and claim it mid-wave
+    act(() => {
+      ref.current.setState({ pendingSkills: 1, waveIndex: 0 });
+    });
+    const claimBtn = container.querySelector('[data-testid="tg-claim-skill-btn"]');
+    expect(claimBtn).not.toBeNull();
+    act(() => {
+      claimBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('[data-testid="tg-decree-modal"]')).not.toBeNull();
+
+    // Choosing a merit skill keeps current waveIndex === 0
+    const firstChoice = container.querySelector('.tg-decree-card');
+    act(() => {
+      firstChoice.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(ref.current.state.waveIndex).toBe(0);
+    expect(ref.current.state.activeDecrees.length).toBe(1);
   });
 });

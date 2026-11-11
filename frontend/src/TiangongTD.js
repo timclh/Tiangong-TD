@@ -26,6 +26,8 @@ import {
   RIVER_ROW,
   CORE_POS,
   AI_VISUAL_SLOTS,
+  KILLS_PER_SKILL,
+  ARMORY_UPGRADES,
   TOWER_TYPES,
   TOWER_KEYS,
   CELESTIAL_DECREES,
@@ -58,33 +60,33 @@ function markTutorialCompletedStorage() {
 export const TUTORIAL_STEPS = {
   1: {
     step: 1,
-    title: '第 1/5 步 · 敕令募兵',
-    body: '仙长！妖魔正从上方裂隙杀向底部【南天门】！请点击下方闪烁的红色【敕令募兵】，花 40 仙灵石召唤新神将！',
+    title: '第 1/5 步 · 花军饷招募器械',
+    body: '将军！敌军正从上方关口攻向底部【城门】！每杀1敌会掉落💰白银与🎖️军功。先点下方红色【招募器械】（花40两）部署新战车！',
     pointerText: '👆 点这里募兵!',
   },
   2: {
     step: 2,
-    title: '第 2/5 步 · 同名合体升星',
-    body: '妙哉！场上有了两尊相同的【1★ 車·雷震子】！请点击下方绿色【一键合阵】，将他们合体进化为 2★ 神将！',
-    pointerText: '👆 点这里合体升2★!',
+    title: '第 2/5 步 · 两台同型器械合体升星',
+    body: '场上有了两台【1★ 車·床弩战车】！点击绿色【一键合阵】，将两台轻弩车改装合体为【2★ 三弓重弩战车】！',
+    pointerText: '👆 点此合体升2★!',
   },
   3: {
     step: 3,
-    title: '第 3/5 步 · 操控【車】十字雷车冲刺',
-    body: '【車】会自动发射十字天雷劈穿同行同列！现在点击棋盘上闪烁的格子，发动【⚡雷车冲刺】直线突进痛击前排小妖！',
-    pointerText: '👆 点此格雷车冲刺!',
+    title: '第 3/5 步 ·【車】直线破甲箭 & 战车冲撞',
+    body: '【車】只沿本列正前方发射实体穿甲重箭（不乱扫全屏）！点击它正前方发光轨道格，发动【🛞战车冲撞】碾压本列敌兵！',
+    pointerText: '👆 点此格战车冲撞!',
   },
   4: {
     step: 4,
-    title: '第 4/5 步 · 操控【炮】隔山架炮 & 火海',
-    body: '看！【炮·哪吒】正前方有【車】充当炮架，自动激活【🔥架炮×1.8倍重伤】！点击棋盘中间【天河】格，轰出一片三昧火海！',
-    pointerText: '👆 点此轰出火海!',
+    title: '第 4/5 步 ·【炮】真象棋“架炮翻山”规则',
+    body: '重点！【炮】正前方同列有友军当【炮架】时，自动仰射【🎯隔山开花炸弹（2倍范围爆炸）】；无炮架则平射单发铁弹！点前方河道定点炮击！',
+    pointerText: '👆 点此定点炮击!',
   },
   5: {
     step: 5,
-    title: '第 5/5 步 · 释放全屏大招【诛仙剑阵】',
-    body: '大功告成！杀怪满100%仙力可放大招；两尊2★合体还能召唤【3★法天象地】真神！点击右下角【诛仙剑阵】清场并正式迎敌！',
-    pointerText: '👆 点此释放全屏大招!',
+    title: '第 5/5 步 · 加技能方式 & 城楼万炮齐射',
+    body: '怎么加技能？①下方【铁匠军械坊】随时花银两加点火药/射速；②每满8杀点上方【🎁领技能】三选一！现在点右下【🧨万炮齐射】开战！',
+    pointerText: '👆 点此万炮齐射!',
   },
 };
 
@@ -102,17 +104,17 @@ export function isDeployableCell(row, col) {
 }
 
 /**
- * Xiangqi Cannon Screen-Mount rule (隔山打牛 · 炮架子):
- * Returns true if `paoTower` has at least one allied tower in front of it
- * (smaller row index, same or adjacent column) acting as a cannon mount!
+ * Xiangqi Cannon Screen-Mount rule (隔山打牛 · 同列炮架子):
+ * Returns true if `paoTower` has at least one allied unit strictly in the SAME column
+ * in front of it (`other.col === paoTower.col && other.row < paoTower.row`) acting as a spotter/mount!
  */
 export function hasCannonMount(paoTower, allTowers) {
   if (!paoTower || paoTower.type !== 'pao') return false;
   return allTowers.some(
     (other) =>
       other.id !== paoTower.id &&
-      other.row < paoTower.row &&
-      Math.abs(other.col - paoTower.col) <= 1
+      other.col === paoTower.col &&
+      other.row < paoTower.row
   );
 }
 
@@ -189,13 +191,19 @@ class TiangongTD extends Component {
       showGuideModal: false,
       cannonAimMode: false, // when true and a 炮 is selected, next board click bombards that spot!
       waveIndex: 0, // 0-based index into WAVES (0..14)
-      stones: 140, // 仙灵石
+      stones: 140, // 战利白银军饷
       summonCount: 0,
       coreHp: 20,
       maxCoreHp: 20,
       score: 0,
       kills: 0,
-      ultCharge: 45, // 0..100 for 诛仙剑阵
+      pendingSkills: 0, // Unclaimed 8-kill merit skill upgrades
+      armory: {
+        gunpowder: 1, // 🧨 火药扩容等级
+        mechanism: 1, // ⚙️ 精钢机括等级
+        barricade: 1, // 🛡️ 铁壁拒马等级
+      },
+      ultCharge: 45, // 0..100 for 城楼万炮齐射
       towers: starterTowers,
       selectedTowerId: starterTowers[0].id, // pre-select 車 so user immediately sees its cross rail & controls!
       enemies: tutorialDummies,
@@ -331,6 +339,8 @@ class TiangongTD extends Component {
         coreHp,
         score,
         kills,
+        pendingSkills,
+        armory,
         ultCharge,
         fireZones,
         fxBeams,
@@ -340,6 +350,9 @@ class TiangongTD extends Component {
       } = prev;
 
       const hasDecree = (id) => activeDecrees.includes(id);
+      const gpLv = (armory?.gunpowder || 1) - 1;
+      const mechLv = (armory?.mechanism || 1) - 1;
+      const barLv = (armory?.barricade || 1) - 1;
       const activeFireZones = (fireZones || []).filter((fz) => fz.expiresAt > now);
       let nextEnemies = enemies.map((e) => ({ ...e }));
       let nextQueue = spawnQueue;
@@ -353,7 +366,7 @@ class TiangongTD extends Component {
         nextSpawnWait = spawned.isBoss ? 1100 : 720;
       }
 
-      // 2. Move enemies & apply burn / fireZone / river slow / 兵 body-block
+      // 2. Move enemies & apply burn / fireZone / river slow / 兵 physical shield-block
       const survivingEnemies = [];
       let hpLost = 0;
       let stonesEarned = 0;
@@ -361,58 +374,62 @@ class TiangongTD extends Component {
       const newFloats = [];
 
       nextEnemies.forEach((enemy) => {
-        // Burn damage over time from Samadhi Fire
         if (enemy.burnUntil > now) {
-          const burnDmg = ((hasDecree('sanmei_zhenhuo') ? 38 : 20) * dtMs) / 1000;
+          const burnDmg = ((hasDecree('sanmei_zhenhuo') ? 35 : 18) * (1 + gpLv * 0.2) * dtMs) / 1000;
           enemy.hp -= burnDmg;
         }
-        // Standing in an active Nezha Fire Lotus Zone (火海)
         const inFireZone = activeFireZones.some(
           (fz) => Math.hypot(enemy.row - fz.row, enemy.col - fz.col) <= fz.radius
         );
         if (inFireZone) {
-          enemy.hp -= (48 * dtMs) / 1000;
+          enemy.hp -= (45 * (1 + gpLv * 0.25) * dtMs) / 1000;
           enemy.slowUntil = Math.max(enemy.slowUntil, now + 400);
         }
 
         if (enemy.hp <= 0) {
           const rewardBonus = hasDecree('sadou_chengbing') ? 1.3 : 1.0;
-          stonesEarned += Math.round(enemy.reward * rewardBonus);
+          const loot = Math.round(enemy.reward * rewardBonus);
+          stonesEarned += loot;
           killsEarned += 1;
+          newFloats.push({
+            id: uid('flt'),
+            col: enemy.col,
+            row: enemy.row,
+            text: `💰+${loot}两`,
+            crit: true,
+            expiresAt: now + 680,
+          });
           return;
         }
 
-        // Check if blocked by a front-line 兵 (Guard) tower right in front of it
+        // Physical Tower Shield block when a 兵 stands directly in front of the enemy
         const blockingGuard = towers.find(
           (t) =>
             t.type === 'bing' &&
-            Math.abs(t.col - enemy.col) <= 0.55 &&
+            Math.abs(t.col - enemy.col) <= 0.58 &&
             t.row >= enemy.row &&
-            t.row - enemy.row <= 0.65
+            t.row - enemy.row <= 0.72
         );
 
-        // Check if on Celestial River (Row 2.5 .. 3.5)
         const inRiver = enemy.row >= RIVER_ROW - 0.45 && enemy.row <= RIVER_ROW + 0.45;
         const riverSlow = inRiver ? (hasDecree('ruoshui_tianhe') ? 0.35 : 0.65) : 1.0;
         const debuffSlow = enemy.slowUntil > now ? 0.45 : 1.0;
-        const guardSlow = blockingGuard ? 0.18 : 1.0;
+        const guardSlow = blockingGuard ? 0.15 : 1.0;
         const step = (enemy.speed * riverSlow * debuffSlow * guardSlow * dtMs) / 1000;
 
         enemy.row += step;
-        // Converge horizontally toward Nantianmen Gate once past row 5.2
         if (enemy.row > 5.0) {
           const dx = CORE_POS.col - enemy.col;
           enemy.col += Math.sign(dx) * Math.min(Math.abs(dx), step * 0.85);
         }
 
-        // Reached Nantianmen Core?
         if (enemy.row >= CORE_POS.row - 0.15) {
           hpLost += enemy.isBoss ? 5 : 1;
           newFloats.push({
             id: uid('flt'),
             col: CORE_POS.col,
             row: CORE_POS.row,
-            text: enemy.isBoss ? '南天门 -5!' : '仙气 -1',
+            text: enemy.isBoss ? '城门 -5!' : '城门 -1',
             crit: true,
             expiresAt: now + 600,
           });
@@ -423,7 +440,7 @@ class TiangongTD extends Component {
 
       nextEnemies = survivingEnemies;
 
-      // 3. Towers acquire targets & fire
+      // 3. Physical War-Machines acquire targets & fire realistic projectiles
       const newBeams = [];
       const nextTowers = towers.map((t) => ({ ...t }));
 
@@ -432,13 +449,13 @@ class TiangongTD extends Component {
           const spec = TOWER_TYPES[tower.type];
           const tierSpec = spec.tiers[tower.star] || spec.tiers[1];
 
-          // Check adjacent 相 (Xiang) aura speed bonus
-          let speedMult = hasDecree('pantao_shenghui') ? 1.2 : 1.0;
+          // War-drum reload speed bonus from adjacent 相 Watchtower + Armory 精钢机括 level
+          let speedMult = (hasDecree('pantao_shenghui') ? 1.2 : 1.0) * (1 + mechLv * 0.18);
           nextTowers.forEach((other) => {
             if (other.id !== tower.id && other.type === 'xiang') {
               const dist = Math.hypot(other.row - tower.row, other.col - tower.col);
-              if (dist <= 1.6) {
-                speedMult += 0.25 * other.star;
+              if (dist <= 1.65) {
+                speedMult += 0.28 * other.star;
               }
             }
           });
@@ -448,7 +465,6 @@ class TiangongTD extends Component {
             return;
           }
 
-          // Calculate damage
           let dmg = spec.baseDamage * tierSpec.dmgMult;
           if (tower.star >= 2 && hasDecree('fatian_xiangdi')) {
             dmg *= 1.45;
@@ -457,83 +473,121 @@ class TiangongTD extends Component {
           let fired = false;
 
           if (tower.type === 'che') {
-            // 车: Cross-line piercing lightning along same row or column (within tolerance)
-            const inCross = nextEnemies.filter(
-              (e) => Math.abs(e.col - tower.col) <= 0.65 || Math.abs(e.row - tower.row) <= 0.65
-            );
-            if (inCross.length > 0) {
+            // 🛞 車 (Ballista War Chariot): Fires a physical armor-piercing bolt STRAIGHT UP ITS OWN COLUMN!
+            const inLane = nextEnemies
+              .filter((e) => Math.abs(e.col - tower.col) <= 0.78 && e.row <= tower.row + 0.35)
+              .sort((a, b) => b.row - a.row); // closest in front first
+            if (inLane.length > 0) {
               fired = true;
-              const thunderBoost = hasDecree('jiutian_shenlei') ? 1.4 : 1.0;
-              inCross.forEach((e) => {
+              const boltBoost = (hasDecree('jiutian_shenlei') ? 1.4 : 1.0) * (1 + mechLv * 0.12);
+              const maxPierce = (hasDecree('jiutian_shenlei') ? 5 : 3) + (tower.star - 1);
+              const pierced = inLane.slice(0, maxPierce);
+              pierced.forEach((e) => {
                 const riverVuln =
                   hasDecree('ruoshui_tianhe') && Math.abs(e.row - RIVER_ROW) <= 0.5 ? 1.35 : 1.0;
-                const finalDmg = Math.round(dmg * thunderBoost * riverVuln);
+                const finalDmg = Math.round(dmg * boltBoost * riverVuln);
                 e.hp -= finalDmg;
-                if (hasDecree('jiutian_shenlei') && Math.random() < 0.3) {
-                  e.slowUntil = Math.max(e.slowUntil, now + 1400);
+                if (hasDecree('jiutian_shenlei')) {
+                  e.row = Math.max(0.2, e.row - 0.14);
+                  e.slowUntil = Math.max(e.slowUntil, now + 900);
                 }
               });
-              const lead = inCross[0];
+              const lastHit = pierced[pierced.length - 1];
               newFloats.push({
                 id: uid('flt'),
-                col: lead.col,
-                row: lead.row,
-                text: `⚡-${Math.round(dmg * thunderBoost)}`,
-                crit: tower.star === 3,
+                col: pierced[0].col,
+                row: pierced[0].row,
+                text: `🏹破甲 -${Math.round(dmg * boltBoost)}`,
+                crit: pierced.length >= 2 || tower.star === 3,
                 expiresAt: now + 500,
               });
               newBeams.push({
                 id: uid('fx'),
-                kind: 'cross',
+                kind: 'bolt',
                 fromCol: tower.col,
                 fromRow: tower.row,
-                toCol: lead.col,
-                toRow: lead.row,
-                color: spec.color,
-                star: tower.star,
-                expiresAt: now + 220,
-              });
-            }
-          } else if (tower.type === 'pao') {
-            // 炮: Target furthest-ahead enemy & deal AoE splash + burn.
-            // If another tower is ahead of 炮 (隔山打牛 · 架炮), deal 1.8x heavy artillery damage!
-            const mounted = hasCannonMount(tower, nextTowers);
-            const mountMult = mounted ? 1.8 : 1.0;
-            const paoDmg = Math.round(dmg * mountMult);
-            const sorted = [...nextEnemies].sort((a, b) => b.row - a.row);
-            const target = sorted[0];
-            if (target) {
-              fired = true;
-              const splashR =
-                (spec.splashRadius || 1.35) * (hasDecree('sanmei_zhenhuo') ? 1.4 : 1.0);
-              nextEnemies.forEach((e) => {
-                if (Math.hypot(e.row - target.row, e.col - target.col) <= splashR) {
-                  e.hp -= paoDmg;
-                  e.burnUntil = Math.max(e.burnUntil, now + 2600);
-                }
-              });
-              newFloats.push({
-                id: uid('flt'),
-                col: target.col,
-                row: target.row,
-                text: mounted ? `🔥隔山重炮 -${paoDmg}!` : `🔥-${paoDmg}`,
-                crit: mounted || tower.star >= 2,
-                expiresAt: now + 520,
-              });
-              newBeams.push({
-                id: uid('fx'),
-                kind: 'fireball',
-                fromCol: tower.col,
-                fromRow: tower.row,
-                toCol: target.col,
-                toRow: target.row,
+                toCol: tower.col,
+                toRow: Math.max(0.2, lastHit.row - 0.3),
                 color: spec.color,
                 star: tower.star,
                 expiresAt: now + 260,
               });
             }
+          } else if (tower.type === 'pao') {
+            // 🧨 炮 (Wheeled Artillery Cannon): Strict Forward Corridor + Authentic Xiangqi Mount Rule!
+            // Look in this cannon's forward column corridor (never backwards or across the whole map!)
+            const inCorridor = nextEnemies
+              .filter((e) => Math.abs(e.col - tower.col) <= 1.05 && e.row <= tower.row + 0.25)
+              .sort((a, b) => b.row - a.row);
+
+            if (inCorridor.length > 0) {
+              fired = true;
+              const mounted = hasCannonMount(tower, nextTowers);
+              const gunpowderMult = 1 + gpLv * 0.28;
+
+              if (mounted) {
+                // 🎯 WITH MOUNT (隔山架炮): High-arcing Explosive Shell over the friendly mount (2.0x AoE + burn)!
+                const paoDmg = Math.round(dmg * 2.0 * gunpowderMult);
+                const target = inCorridor[0];
+                const splashR =
+                  (spec.splashRadius || 1.35) *
+                  (hasDecree('sanmei_zhenhuo') ? 1.45 : 1.0) *
+                  (1 + gpLv * 0.08);
+                nextEnemies.forEach((e) => {
+                  if (Math.hypot(e.row - target.row, e.col - target.col) <= splashR) {
+                    e.hp -= paoDmg;
+                    e.burnUntil = Math.max(e.burnUntil, now + 2600);
+                  }
+                });
+                newFloats.push({
+                  id: uid('flt'),
+                  col: target.col,
+                  row: target.row,
+                  text: `💥隔山开花弹 -${paoDmg}!`,
+                  crit: true,
+                  expiresAt: now + 560,
+                });
+                newBeams.push({
+                  id: uid('fx'),
+                  kind: 'arc_shell',
+                  fromCol: tower.col,
+                  fromRow: tower.row,
+                  toCol: target.col,
+                  toRow: target.row,
+                  splashR,
+                  color: spec.color,
+                  star: tower.star,
+                  expiresAt: now + 320,
+                });
+              } else {
+                // ⚫ WITHOUT MOUNT (平射实心铁弹): Hits ONLY the first front-most enemy in lane + knockback!
+                const paoDmg = Math.round(dmg * 1.0 * gunpowderMult);
+                const firstEnemy = inCorridor[0];
+                firstEnemy.hp -= paoDmg;
+                firstEnemy.row = Math.max(0.2, firstEnemy.row - 0.22);
+                newFloats.push({
+                  id: uid('flt'),
+                  col: firstEnemy.col,
+                  row: firstEnemy.row,
+                  text: `⚫铁弹平射 -${paoDmg}`,
+                  crit: false,
+                  expiresAt: now + 480,
+                });
+                newBeams.push({
+                  id: uid('fx'),
+                  kind: 'solid_ball',
+                  fromCol: tower.col,
+                  fromRow: tower.row,
+                  toCol: firstEnemy.col,
+                  toRow: firstEnemy.row,
+                  color: '#94A3B8',
+                  star: tower.star,
+                  expiresAt: now + 240,
+                });
+              }
+            }
           } else if (tower.type === 'ma') {
-            // 马: High-crit jump strike on enemies within range
+            // 🐎 馬 (Armored Cavalry): Close-range Guan-Dao crescent blade slash
             const inRange = nextEnemies.filter(
               (e) => Math.hypot(e.row - tower.row, e.col - tower.col) <= spec.range
             );
@@ -553,54 +607,83 @@ class TiangongTD extends Component {
                   id: uid('flt'),
                   col: target.col,
                   row: target.row,
-                  text: isCrit ? `天眼暴击 -${hitDmg}!` : `-${hitDmg}`,
+                  text: isCrit ? `⚔️斩马暴击 -${hitDmg}!` : `-${hitDmg}`,
                   crit: isCrit,
                   expiresAt: now + 520,
                 });
                 newBeams.push({
                   id: uid('fx'),
-                  kind: 'slash',
+                  kind: 'crescent',
                   fromCol: tower.col,
                   fromRow: tower.row,
                   toCol: target.col,
                   toRow: target.row,
                   color: spec.color,
                   star: tower.star,
-                  expiresAt: now + 220,
+                  expiresAt: now + 230,
                 });
               });
             }
-          } else {
-            // 兵 / 相: Shockwave pulse around tower
+          } else if (tower.type === 'bing') {
+            // 🛡️ 兵 (Tower Shield & Pikeman): Thrusts steel pikes at close-range enemies
             const inRange = nextEnemies.filter(
               (e) => Math.hypot(e.row - tower.row, e.col - tower.col) <= spec.range
             );
             if (inRange.length > 0) {
               fired = true;
-              inRange.forEach((e) => {
-                e.hp -= Math.round(dmg);
-                if (tower.type === 'bing') {
-                  e.slowUntil = Math.max(e.slowUntil, now + 1300);
-                }
+              const pikeDmg = Math.round(dmg * (1 + barLv * 0.25));
+              inRange.slice(0, 2).forEach((e) => {
+                e.hp -= pikeDmg;
+                e.slowUntil = Math.max(e.slowUntil, now + 1200);
               });
               newFloats.push({
                 id: uid('flt'),
                 col: inRange[0].col,
                 row: inRange[0].row,
-                text: `-${Math.round(dmg)}`,
+                text: `🛡️枪刺 -${pikeDmg}`,
                 crit: tower.star === 3,
-                expiresAt: now + 480,
+                expiresAt: now + 460,
               });
               newBeams.push({
                 id: uid('fx'),
-                kind: 'ring',
+                kind: 'pike',
                 fromCol: tower.col,
                 fromRow: tower.row,
                 toCol: inRange[0].col,
                 toRow: inRange[0].row,
                 color: spec.color,
                 star: tower.star,
-                expiresAt: now + 240,
+                expiresAt: now + 210,
+              });
+            }
+          } else {
+            // 🏹 相 (Zhuge Repeating Crossbow Watchtower): Rapid feathered arrows at nearby targets
+            const inRange = nextEnemies.filter(
+              (e) => Math.hypot(e.row - tower.row, e.col - tower.col) <= spec.range
+            );
+            if (inRange.length > 0) {
+              fired = true;
+              const target = inRange[0];
+              const arrowDmg = Math.round(dmg * (1 + mechLv * 0.15));
+              target.hp -= arrowDmg;
+              newFloats.push({
+                id: uid('flt'),
+                col: target.col,
+                row: target.row,
+                text: `-${arrowDmg}`,
+                crit: false,
+                expiresAt: now + 420,
+              });
+              newBeams.push({
+                id: uid('fx'),
+                kind: 'arrow',
+                fromCol: tower.col,
+                fromRow: tower.row,
+                toCol: target.col,
+                toRow: target.row,
+                color: '#FDE047',
+                star: tower.star,
+                expiresAt: now + 200,
               });
             }
           }
@@ -611,13 +694,22 @@ class TiangongTD extends Component {
         });
       }
 
-      // Sweep enemies killed by tower shots this tick
+      // Sweep enemies killed by tower shots this tick & drop visible Silver Coins!
       const afterShotEnemies = [];
       nextEnemies.forEach((e) => {
         if (e.hp <= 0) {
           const rewardBonus = hasDecree('sadou_chengbing') ? 1.3 : 1.0;
-          stonesEarned += Math.round(e.reward * rewardBonus);
+          const loot = Math.round(e.reward * rewardBonus);
+          stonesEarned += loot;
           killsEarned += 1;
+          newFloats.push({
+            id: uid('flt'),
+            col: e.col,
+            row: e.row,
+            text: `💰+${loot}两`,
+            crit: true,
+            expiresAt: now + 680,
+          });
         } else {
           afterShotEnemies.push(e);
         }
@@ -626,8 +718,23 @@ class TiangongTD extends Component {
       const nextCoreHp = Math.max(0, coreHp - hpLost);
       const nextStones = stones + stonesEarned;
       const nextKills = kills + killsEarned;
+      // Award +1 free Skill Upgrade every KILLS_PER_SKILL (8) enemies killed!
+      const newlyUnlockedSkills =
+        Math.floor(nextKills / KILLS_PER_SKILL) - Math.floor(kills / KILLS_PER_SKILL);
+      const nextPendingSkills = (pendingSkills || 0) + Math.max(0, newlyUnlockedSkills);
+      if (newlyUnlockedSkills > 0) {
+        newFloats.push({
+          id: uid('flt'),
+          col: CORE_POS.col,
+          row: 4.2,
+          text: `🎖️歼敌满${nextKills}人！上方可领新技能！`,
+          crit: true,
+          expiresAt: now + 1200,
+        });
+      }
+
       const nextScore = score + killsEarned * 25 + stonesEarned;
-      const chargeRate = hasDecree('lingxiao_jianzhen') ? 5.5 : 3.5;
+      const chargeRate = hasDecree('lingxiao_jianzhen') ? 14 : 10;
       const nextUlt = Math.min(100, ultCharge + killsEarned * chargeRate);
 
       // Defeat check
@@ -666,9 +773,11 @@ class TiangongTD extends Component {
           spawnQueue: [],
           stones: nextStones + 35,
           kills: nextKills,
+          pendingSkills: nextPendingSkills,
           score: nextScore + 150,
           ultCharge: nextUlt,
           decreeChoices: shuffled,
+          decreeSource: 'wave',
           fxBeams: [],
           floatTexts: [],
         };
@@ -682,6 +791,7 @@ class TiangongTD extends Component {
         stones: nextStones,
         coreHp: nextCoreHp,
         kills: nextKills,
+        pendingSkills: nextPendingSkills,
         score: nextScore,
         ultCharge: nextUlt,
         fireZones: activeFireZones,
@@ -845,6 +955,7 @@ class TiangongTD extends Component {
     hapticImpact();
 
     this.setState((prev) => {
+      const gpLv = (prev.armory?.gunpowder || 1) - 1;
       let nextEnemies = prev.enemies.map((e) => ({ ...e }));
       let nextFireZones = [...(prev.fireZones || [])];
       let nextBeams = [...prev.fxBeams];
@@ -852,42 +963,54 @@ class TiangongTD extends Component {
       let nextTowers = prev.towers.map((t) => ({ ...t }));
 
       if (tower.type === 'che') {
-        // ⚡ 車: Cross-Line Thunder Overdrive along its row & column!
+        // 🛞 車 (Armored Chariot Ram & Piercing Volley): Crushes enemies along its track ONLY (no full-screen laser!)
+        const destR = targetRow !== null ? targetRow : Math.max(1, tower.row - 3);
+        const destC = targetCol !== null ? targetCol : tower.col;
+        const minR = Math.min(tower.row, destR) - 0.6;
+        const maxR = Math.max(tower.row, destR) + 0.6;
+        const minC = Math.min(tower.col, destC) - 0.6;
+        const maxC = Math.max(tower.col, destC) + 0.6;
+
         nextEnemies.forEach((e) => {
-          if (Math.abs(e.col - tower.col) <= 0.85 || Math.abs(e.row - tower.row) <= 0.85) {
+          const hitOnTrack =
+            (e.row >= minR && e.row <= maxR && Math.abs(e.col - destC) <= 0.85) ||
+            (Math.abs(e.col - tower.col) <= 0.78 && e.row <= tower.row);
+          if (hitOnTrack) {
             e.hp -= baseSkillDmg;
-            e.slowUntil = Math.max(e.slowUntil, now + 1600);
+            e.row = Math.max(0.2, e.row - 0.35);
+            e.slowUntil = Math.max(e.slowUntil, now + 1500);
           }
         });
         nextBeams.push({
           id: uid('fx'),
-          kind: 'cross',
+          kind: 'ram_track',
           fromCol: tower.col,
           fromRow: tower.row,
-          toCol: tower.col,
-          toRow: tower.row,
-          color: '#F0CF86',
-          star: 3,
-          expiresAt: now + 420,
+          toCol: destC,
+          toRow: targetRow !== null ? destR : 0.4,
+          color: '#6FA8FF',
+          star: tower.star,
+          expiresAt: now + 380,
         });
         nextFloats.push({
           id: uid('flt'),
-          col: tower.col,
-          row: Math.max(1, tower.row - 1),
-          text: `⚡雷车十字轰击 -${baseSkillDmg}!`,
+          col: destC,
+          row: Math.max(1, destR),
+          text: `🛞战车碾压 -${baseSkillDmg}!`,
           crit: true,
           expiresAt: now + 680,
         });
       } else if (tower.type === 'pao') {
-        // 🔥 炮: Launch Samadhi Fire Lotus at target cell (or lead enemy / River center)
+        // 🧨 炮: Launch parabolic Explosive Shell to target cell, leaving a localized burning crater!
         const lead = [...nextEnemies].sort((a, b) => b.row - a.row)[0];
         const aimRow = targetRow !== null ? targetRow : lead ? lead.row : RIVER_ROW;
-        const aimCol = targetCol !== null ? targetCol : lead ? lead.col : CORE_POS.col;
+        const aimCol = targetCol !== null ? targetCol : lead ? lead.col : tower.col;
         const mounted = hasCannonMount(tower, nextTowers);
-        const fireDmg = Math.round(baseSkillDmg * (mounted ? 1.5 : 1.0));
+        const fireDmg = Math.round(baseSkillDmg * (mounted ? 1.6 : 1.0) * (1 + gpLv * 0.28));
+        const craterRadius = 1.45 * (1 + gpLv * 0.08);
 
         nextEnemies.forEach((e) => {
-          if (Math.hypot(e.row - aimRow, e.col - aimCol) <= 1.85) {
+          if (Math.hypot(e.row - aimRow, e.col - aimCol) <= craterRadius + 0.3) {
             e.hp -= fireDmg;
             e.burnUntil = Math.max(e.burnUntil, now + 4000);
           }
@@ -896,54 +1019,55 @@ class TiangongTD extends Component {
           id: uid('fz'),
           row: aimRow,
           col: aimCol,
-          radius: 1.45,
+          radius: craterRadius,
           expiresAt: now + 4500,
         });
         nextBeams.push({
           id: uid('fx'),
-          kind: 'fireball',
+          kind: 'arc_shell',
           fromCol: tower.col,
           fromRow: tower.row,
           toCol: aimCol,
           toRow: aimRow,
+          splashR: craterRadius,
           color: '#E5594B',
           star: 3,
-          expiresAt: now + 420,
+          expiresAt: now + 440,
         });
         nextFloats.push({
           id: uid('flt'),
           col: aimCol,
           row: aimRow,
-          text: `🔥三昧火莲 -${fireDmg}!`,
+          text: `💥定点重炮 -${fireDmg}!`,
           crit: true,
           expiresAt: now + 700,
         });
       } else {
-        // 馬 / 兵 / 相: Shockwave burst around tower (or at target cell)
+        // 馬 / 兵 / 相: Localized weapon sweep around target cell
         const centerR = targetRow !== null ? targetRow : tower.row;
         const centerC = targetCol !== null ? targetCol : tower.col;
         nextEnemies.forEach((e) => {
-          if (Math.hypot(e.row - centerR, e.col - centerC) <= 2.3) {
+          if (Math.hypot(e.row - centerR, e.col - centerC) <= 2.1) {
             e.hp -= baseSkillDmg;
             e.slowUntil = Math.max(e.slowUntil, now + 1800);
           }
         });
         nextBeams.push({
           id: uid('fx'),
-          kind: 'ring',
-          fromCol: centerC,
-          fromRow: centerR,
+          kind: 'crescent',
+          fromCol: tower.col,
+          fromRow: tower.row,
           toCol: centerC,
           toRow: centerR,
           color: spec.color,
           star: 3,
-          expiresAt: now + 400,
+          expiresAt: now + 380,
         });
         nextFloats.push({
           id: uid('flt'),
           col: centerC,
           row: centerR,
-          text: `✦神技 -${baseSkillDmg}!`,
+          text: `⚔️破阵斩 -${baseSkillDmg}!`,
           crit: true,
           expiresAt: now + 650,
         });
@@ -1088,6 +1212,67 @@ class TiangongTD extends Component {
     }
   };
 
+  getArmoryCost(trackId) {
+    const def = ARMORY_UPGRADES[trackId];
+    const lv = this.state.armory?.[trackId] || 1;
+    return def.baseCost + (lv - 1) * def.costStep;
+  }
+
+  upgradeArmory = (trackId) => {
+    const def = ARMORY_UPGRADES[trackId];
+    if (!def) return false;
+    const cost = this.getArmoryCost(trackId);
+    if (this.state.stones < cost) return false;
+
+    playSound(SOUND.CAPTURE);
+    hapticImpact();
+    const now = Date.now();
+
+    this.setState((prev) => {
+      const nextLv = (prev.armory?.[trackId] || 1) + 1;
+      const healGate = trackId === 'barricade' ? 4 : 0;
+      return {
+        stones: prev.stones - cost,
+        armory: {
+          ...prev.armory,
+          [trackId]: nextLv,
+        },
+        maxCoreHp: prev.maxCoreHp + healGate,
+        coreHp: Math.min(prev.maxCoreHp + healGate, prev.coreHp + healGate),
+        floatTexts: [
+          ...prev.floatTexts,
+          {
+            id: uid('flt'),
+            col: CORE_POS.col,
+            row: 5.5,
+            text: `${def.icon}${def.name} 升至 Lv.${nextLv}!`,
+            crit: true,
+            expiresAt: now + 900,
+          },
+        ],
+      };
+    });
+    return true;
+  };
+
+  claimMeritSkill = () => {
+    const { pendingSkills, activeDecrees } = this.state;
+    if (!pendingSkills || pendingSkills <= 0) return false;
+    playSound(SOUND.PLACE);
+    hapticTap();
+
+    const available = CELESTIAL_DECREES.filter((d) => !activeDecrees.includes(d.id));
+    const pool = available.length >= 3 ? available : CELESTIAL_DECREES;
+    const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, 3);
+
+    this.setState((prev) => ({
+      pendingSkills: Math.max(0, prev.pendingSkills - 1),
+      decreeChoices: shuffled,
+      decreeSource: 'merit',
+    }));
+    return true;
+  };
+
   castUltimate = () => {
     const { ultCharge, enemies } = this.state;
     if (ultCharge < 100) return false;
@@ -1095,7 +1280,8 @@ class TiangongTD extends Component {
     hapticNotification('success');
 
     const now = Date.now();
-    const ultMult = this.hasDecree('lingxiao_jianzhen') ? 1.8 : 1.0;
+    const gpLv = (this.state.armory?.gunpowder || 1) - 1;
+    const ultMult = (this.hasDecree('lingxiao_jianzhen') ? 1.8 : 1.0) * (1 + gpLv * 0.25);
     const dmg = Math.round(320 * ultMult);
 
     if (this.state.tutorialStep === 5) {
@@ -1112,17 +1298,32 @@ class TiangongTD extends Component {
         }))
         .filter((e) => !finishingTutorial || e.hp > 0);
 
+      // Launch 5 real parabolic siege cannonballs from the bottom fortress wall!
+      const volleyArcs = [1, 2, 3, 4, 5].map((c) => ({
+        id: uid('fx'),
+        kind: 'arc_shell',
+        fromCol: CORE_POS.col,
+        fromRow: CORE_POS.row,
+        toCol: c,
+        toRow: 2.2 + (c % 2) * 1.1,
+        splashR: 1.1,
+        color: '#F59E0B',
+        star: 3,
+        expiresAt: now + 450,
+      }));
+
       return {
         tutorialStep: finishingTutorial ? null : prev.tutorialStep,
         ultCharge: this.hasDecree('lingxiao_jianzhen') ? 25 : 0,
         enemies: updatedEnemies,
+        fxBeams: [...prev.fxBeams, ...volleyArcs],
         floatTexts: [
           ...prev.floatTexts,
           ...enemies.slice(0, 6).map((e) => ({
             id: uid('flt'),
             col: e.col,
             row: e.row,
-            text: `🗡️诛仙 -${dmg}!`,
+            text: `💥城炮齐射 -${dmg}!`,
             crit: true,
             expiresAt: now + 650,
           })),
@@ -1132,7 +1333,7 @@ class TiangongTD extends Component {
                   id: uid('flt'),
                   col: CORE_POS.col,
                   row: 3.5,
-                  text: '🎉 新手传功圆满！正式迎战第一波妖军！',
+                  text: '🎉 操练圆满！第一波敌军正式攻城！',
                   crit: true,
                   expiresAt: now + 1400,
                 },
@@ -1164,7 +1365,8 @@ class TiangongTD extends Component {
     hapticImpact();
 
     this.setState((prev) => {
-      const nextWaveIdx = prev.waveIndex + 1;
+      const isMeritSkill = prev.decreeSource === 'merit';
+      const nextWaveIdx = isMeritSkill ? prev.waveIndex : prev.waveIndex + 1;
       const nextDecrees = prev.activeDecrees.includes(decree.id)
         ? prev.activeDecrees
         : [...prev.activeDecrees, decree.id];
@@ -1174,9 +1376,10 @@ class TiangongTD extends Component {
       return {
         activeDecrees: nextDecrees,
         decreeChoices: null,
+        decreeSource: null,
         waveIndex: nextWaveIdx,
-        spawnQueue: this.buildWaveSpawnQueue(nextWaveIdx),
-        spawnCooldownMs: 500,
+        spawnQueue: isMeritSkill ? prev.spawnQueue : this.buildWaveSpawnQueue(nextWaveIdx),
+        spawnCooldownMs: isMeritSkill ? prev.spawnCooldownMs : 500,
         stones: prev.stones + bonusStones,
         maxCoreHp: prev.maxCoreHp + bonusHp,
         coreHp: Math.min(prev.maxCoreHp + bonusHp, prev.coreHp + bonusHp),
@@ -1211,6 +1414,9 @@ class TiangongTD extends Component {
       coreHp,
       maxCoreHp,
       score,
+      kills,
+      pendingSkills,
+      armory,
       ultCharge,
       towers,
       selectedTowerId,
@@ -1239,20 +1445,28 @@ class TiangongTD extends Component {
     const selectedTier = selectedTower ? selectedSpec.tiers[selectedTower.star] : null;
     const selectedMounted = selectedTower ? hasCannonMount(selectedTower, towers) : false;
 
+    const killsIntoSkill = kills % KILLS_PER_SKILL;
+    const skillProgressPct = Math.round((killsIntoSkill / KILLS_PER_SKILL) * 100);
+    const gpCost = this.getArmoryCost('gunpowder');
+    const mechCost = this.getArmoryCost('mechanism');
+    const barCost = this.getArmoryCost('barricade');
+
     // Contextual dynamic step-by-step coach tip
-    let stepTip = '💡 点击棋盘上的 Q版神将 查看专属走法，或点下方【敕令募兵】召唤新神将！';
-    if (stones >= summonCost && towers.length <= 3) {
-      stepTip = `👆 你有 ${stones} 仙灵石！快点下方红色【敕令募兵】召唤更多 Q版天兵神将！`;
+    let stepTip = '💡 点击场上的实体军械查看射界与规则，下方【铁匠军械坊】可随时花银两升级武器！';
+    if (pendingSkills > 0) {
+      stepTip = `🎖️ 杀敌军功已满！点击上方金色【🎁 领新技能 (+${pendingSkills})】免费选择一项军械改装！`;
+    } else if (stones >= summonCost && towers.length <= 3) {
+      stepTip = `👆 当前有 💰${stones}两军饷！点下方红色【招募器械】补充战车、火炮或重盾！`;
     } else if (mergePairs.length > 0) {
-      stepTip = `✨ 场上已有 ${mergePairs.length} 对同名神将！点绿色【一键合阵】或互点两尊同名棋子升星化神！`;
+      stepTip = `✨ 场上有 ${mergePairs.length} 对同型同星器械！点绿色【一键合阵】合体改装升星！`;
     } else if (selectedTower?.type === 'che') {
-      stepTip = '⚡ 已选【車·雷震子】：自动攻击同行同列十字线！点击发光十字格可发动【雷车冲刺】直线秒怪！';
+      stepTip = '🛞 已选【車·床弩战车】：只沿本列正前方发射实体破甲箭（穿透3敌）！点蓝色车辙格可直线冲撞！';
     } else if (selectedTower?.type === 'pao') {
       stepTip = selectedMounted
-        ? '🔥 已选【炮·哪吒】（已激活隔山架炮×1.8倍伤害！）：点下方【指哪打哪】再点棋盘任意格发射火莲火海！'
-        : '🔥 已选【炮·哪吒】：把它移到其他神将正后方即可激活【隔山打牛·伤害×1.8】！点天河格可直接轰炸！';
+        ? '🧨 已选【炮·红衣火炮】（同列前排有炮架 → 已激活2倍隔山开花炸弹！）：点【🎯定点炮击】可指哪炸哪！'
+        : '🧨 已选【炮·红衣火炮】（当前无炮架：仅平射单发铁弹）：在它同列正前方摆一尊盾/车做炮架，即可翻山轰出2倍开花炸弹！';
     } else if (selectedTower?.type === 'ma') {
-      stepTip = '🐎 已选【馬·二郎神】：点击周围发光的“日”字格，可发动【哮天跳斩】瞬移暴击！';
+      stepTip = '🐎 已选【馬·斩马铁骑】：近身挥砍高暴击！点击发光的象棋“日”字格可跃马跳劈！';
     }
 
     return (
@@ -1332,13 +1546,13 @@ class TiangongTD extends Component {
 
             <div className="tg-hud-stats">
               <div className="tg-stat-pill">
-                <span className="tg-stat-label">仙灵石</span>
+                <span className="tg-stat-label">战利银两 (买兵/加点)</span>
                 <span className="tg-stat-val gold" data-testid="tg-stones">
-                  ✦ {stones}
+                  💰 {stones}两
                 </span>
               </div>
               <div className="tg-stat-pill">
-                <span className="tg-stat-label">南天门仙气</span>
+                <span className="tg-stat-label">南天门城防</span>
                 <span
                   className={`tg-stat-val hp ${coreHp <= 6 ? 'low' : ''}`}
                   data-testid="tg-core-hp"
@@ -1347,15 +1561,48 @@ class TiangongTD extends Component {
                 </span>
               </div>
               <div className="tg-stat-pill">
-                <span className="tg-stat-label">驻守神将</span>
+                <span className="tg-stat-label">阵上器械</span>
                 <span className="tg-stat-val" data-testid="tg-tower-count">
                   {towers.length} 尊
                 </span>
               </div>
               <div className="tg-stat-pill">
-                <span className="tg-stat-label">功德战绩</span>
-                <span className="tg-stat-val">{score}</span>
+                <span className="tg-stat-label">累计歼敌</span>
+                <span className="tg-stat-val" data-testid="tg-kill-count">
+                  ⚔️ {kills} 敌
+                </span>
               </div>
+            </div>
+
+            {/* Kill Loot & Skill Merit Progress Bar (明示杀敌奖励与加技能条件) */}
+            <div className="tg-kill-reward-bar" data-testid="tg-kill-reward-bar">
+              <div className="tg-krb-left">
+                <span className="tg-krb-rule">
+                  战利规则：每灭1敌掉 <strong>💰+{currentWave.reward}两银</strong> · 每满{' '}
+                  <strong>{KILLS_PER_SKILL}杀</strong> 免费升1项技能
+                </span>
+                <div className="tg-krb-track">
+                  <div
+                    className="tg-krb-fill"
+                    style={{ width: `${pendingSkills > 0 ? 100 : skillProgressPct}%` }}
+                  />
+                </div>
+              </div>
+
+              {pendingSkills > 0 ? (
+                <button
+                  type="button"
+                  className="tg-claim-skill-btn"
+                  data-testid="tg-claim-skill-btn"
+                  onClick={this.claimMeritSkill}
+                >
+                  🎁 领新技能 (+{pendingSkills})
+                </button>
+              ) : (
+                <span className="tg-krb-counter">
+                  🎖️ {killsIntoSkill}/{KILLS_PER_SKILL}杀领技能
+                </span>
+              )}
             </div>
           </div>
 
@@ -1469,6 +1716,20 @@ class TiangongTD extends Component {
                         !tower &&
                         isKnightJump(selectedTower.row, selectedTower.col, r, c);
 
+                      const isPaoLane =
+                        selectedTower &&
+                        selectedTower.type === 'pao' &&
+                        c === selectedTower.col &&
+                        r < selectedTower.row;
+
+                      const isMountForSelectedPao =
+                        tower &&
+                        selectedTower &&
+                        selectedTower.type === 'pao' &&
+                        tower.id !== selectedTower.id &&
+                        tower.col === selectedTower.col &&
+                        tower.row < selectedTower.row;
+
                       const isPaoAim =
                         selectedTower &&
                         selectedTower.type === 'pao' &&
@@ -1496,6 +1757,7 @@ class TiangongTD extends Component {
                             isSelected ? 'selected' : '',
                             isMergeCandidate ? 'merge-hint' : '',
                             isCheRail ? 'rail-highlight' : '',
+                            isPaoLane ? 'pao-lane-highlight' : '',
                             isMaJump ? 'knight-highlight' : '',
                             isPaoAim ? 'pao-aim-highlight' : '',
                             activeFireHere ? 'burning-cell' : '',
@@ -1509,6 +1771,9 @@ class TiangongTD extends Component {
                             <span className="tg-finger-pointer">
                               {TUTORIAL_STEPS[tutorialStep].pointerText}
                             </span>
+                          )}
+                          {isMountForSelectedPao && (
+                            <span className="tg-mount-spotter-badge">🎯炮架</span>
                           )}
                           {isCore && (
                             <div className="tg-core-fortress" title="南天门 · 凌霄宝殿">
@@ -1567,7 +1832,7 @@ class TiangongTD extends Component {
                   })}
                 </div>
 
-                {/* SVG Attack Beams & Projectiles */}
+                {/* SVG Physical Ballistics & Projectiles (No Full-Screen Lasers!) */}
                 <svg
                   className="tg-fx-svg"
                   viewBox={`0 0 ${exactWidth} ${exactHeight}`}
@@ -1577,31 +1842,56 @@ class TiangongTD extends Component {
                     const y1 = (fx.fromRow + 0.5) * cellSize;
                     const x2 = (fx.toCol + 0.5) * cellSize;
                     const y2 = (fx.toRow + 0.5) * cellSize;
-                    if (fx.kind === 'cross') {
+
+                    if (fx.kind === 'arc_shell') {
+                      // Parabolic high-arcing Explosive Cannon Shell arching over front-line mount!
+                      const ctrlX = (x1 + x2) / 2 + cellSize * 0.48;
+                      const ctrlY = Math.min(y1, y2) - cellSize * 0.9;
+                      const craterPx = cellSize * Math.min(1.35, (fx.splashR || 1.1) * 0.55);
                       return (
                         <g key={fx.id}>
+                          {/* Ground shadow line */}
                           <line
                             x1={x1}
-                            y1={0}
-                            x2={x1}
-                            y2={exactHeight}
-                            stroke={fx.color}
-                            strokeWidth={fx.star * 2.5}
-                            strokeOpacity="0.65"
-                          />
-                          <line
-                            x1={0}
                             y1={y1}
-                            x2={exactWidth}
-                            y2={y1}
-                            stroke={fx.color}
-                            strokeWidth={fx.star * 2.5}
-                            strokeOpacity="0.65"
+                            x2={x2}
+                            y2={y2}
+                            stroke="rgba(0,0,0,0.35)"
+                            strokeWidth="2"
+                            strokeDasharray="3 3"
+                          />
+                          {/* High parabolic cannonball trajectory */}
+                          <path
+                            d={`M ${x1} ${y1} Q ${ctrlX} ${ctrlY} ${x2} ${y2}`}
+                            fill="none"
+                            stroke="#FACC15"
+                            strokeWidth="2.5"
+                            strokeDasharray="5 3"
+                          />
+                          {/* Explosive impact crater */}
+                          <circle
+                            cx={x2}
+                            cy={y2}
+                            r={craterPx}
+                            fill="rgba(239, 68, 68, 0.34)"
+                            stroke="#F97316"
+                            strokeWidth="2.2"
+                          />
+                          {/* Iron Cannon Shell */}
+                          <circle
+                            cx={x2}
+                            cy={y2}
+                            r="6.5"
+                            fill="#1E293B"
+                            stroke="#FDE047"
+                            strokeWidth="2"
                           />
                         </g>
                       );
                     }
-                    if (fx.kind === 'fireball') {
+
+                    if (fx.kind === 'solid_ball') {
+                      // Unmounted flat-trajectory solid iron cannonball
                       return (
                         <g key={fx.id}>
                           <line
@@ -1609,45 +1899,100 @@ class TiangongTD extends Component {
                             y1={y1}
                             x2={x2}
                             y2={y2}
-                            stroke="#F0CF86"
-                            strokeWidth={fx.star * 2}
-                            strokeDasharray="4 2"
+                            stroke="#CBD5E1"
+                            strokeWidth="2.2"
                           />
+                          <circle cx={x1} cy={y1 - 6} r="6" fill="rgba(226,232,240,0.45)" />
                           <circle
                             cx={x2}
                             cy={y2}
-                            r={cellSize * (0.55 + fx.star * 0.15)}
-                            fill="rgba(229, 89, 75, 0.28)"
-                            stroke="#E5594B"
-                            strokeWidth="2"
+                            r="5.2"
+                            fill="#0F172A"
+                            stroke="#E2E8F0"
+                            strokeWidth="1.5"
                           />
                         </g>
                       );
                     }
-                    if (fx.kind === 'ring') {
+
+                    if (fx.kind === 'bolt') {
+                      // Heavy Ballista Armor-Piercing Bolt along its single column
                       return (
-                        <circle
+                        <g key={fx.id}>
+                          <line
+                            x1={x1}
+                            y1={y1 - 8}
+                            x2={x2}
+                            y2={y2}
+                            stroke="#93C5FD"
+                            strokeWidth="3.2"
+                            strokeLinecap="round"
+                          />
+                          {/* Steel Arrowhead at target */}
+                          <polygon
+                            points={`${x2},${y2 - 6} ${x2 - 5},${y2 + 5} ${x2 + 5},${y2 + 5}`}
+                            fill="#F8FAFC"
+                            stroke="#0284C7"
+                            strokeWidth="1.2"
+                          />
+                        </g>
+                      );
+                    }
+
+                    if (fx.kind === 'ram_track') {
+                      // Twin parallel chariot wheel tracks along the rammed path
+                      return (
+                        <g key={fx.id}>
+                          <line
+                            x1={x1 - 7}
+                            y1={y1}
+                            x2={x2 - 7}
+                            y2={y2}
+                            stroke="#FACC15"
+                            strokeWidth="3"
+                            strokeDasharray="6 3"
+                          />
+                          <line
+                            x1={x1 + 7}
+                            y1={y1}
+                            x2={x2 + 7}
+                            y2={y2}
+                            stroke="#FACC15"
+                            strokeWidth="3"
+                            strokeDasharray="6 3"
+                          />
+                        </g>
+                      );
+                    }
+
+                    if (fx.kind === 'crescent') {
+                      // Cavalry Guan-Dao blade arc right on target
+                      return (
+                        <path
                           key={fx.id}
-                          cx={x1}
-                          cy={y1}
-                          r={cellSize * 1.3}
+                          d={`M ${x2 - 16} ${y2 + 8} Q ${x2} ${y2 - 18} ${x2 + 16} ${y2 + 8}`}
                           fill="none"
-                          stroke={fx.color}
-                          strokeWidth={fx.star * 2}
-                          strokeOpacity="0.7"
+                          stroke="#FEF08A"
+                          strokeWidth="3.6"
+                          strokeLinecap="round"
                         />
                       );
                     }
+
+                    // Pike thrust or Watchtower feathered arrow
                     return (
-                      <line
-                        key={fx.id}
-                        x1={x1}
-                        y1={y1}
-                        x2={x2}
-                        y2={y2}
-                        stroke={fx.color}
-                        strokeWidth={fx.star * 2.2}
-                      />
+                      <g key={fx.id}>
+                        <line
+                          x1={x1}
+                          y1={y1}
+                          x2={x2}
+                          y2={y2}
+                          stroke={fx.color}
+                          strokeWidth="2.4"
+                          strokeLinecap="round"
+                        />
+                        <circle cx={x2} cy={y2} r="3" fill="#FFFBEB" />
+                      </g>
                     );
                   })}
                 </svg>
@@ -1693,9 +2038,9 @@ class TiangongTD extends Component {
                   </span>
                 )}
                 <span className="tg-btn-main">
-                  <Icon name="sparkles" size={15} /> 敕令募兵
+                  <Icon name="sparkles" size={15} /> 招募器械
                 </span>
-                <span className="tg-btn-sub">消耗 {summonCost} 仙灵石</span>
+                <span className="tg-btn-sub">花费 💰{summonCost}两</span>
               </button>
 
               <button
@@ -1719,7 +2064,7 @@ class TiangongTD extends Component {
                 <span className="tg-btn-main">
                   <Icon name="zap" size={15} /> 一键合阵 ({mergePairs.length})
                 </span>
-                <span className="tg-btn-sub">同名升星 · 3★化神</span>
+                <span className="tg-btn-sub">同型升星 · 3★重器</span>
               </button>
 
               <button
@@ -1741,12 +2086,51 @@ class TiangongTD extends Component {
                   </span>
                 )}
                 <span className="tg-btn-main">
-                  <Icon name="crown" size={15} /> 诛仙剑阵
+                  <Icon name="crown" size={15} /> 城炮齐射
                 </span>
                 <span className="tg-btn-sub">
-                  {ultCharge >= 100 ? '点击释放全屏大招!' : `仙力充能 ${Math.floor(ultCharge)}%`}
+                  {ultCharge >= 100 ? '火药满仓·点击齐射!' : `火药装填 ${Math.floor(ultCharge)}%`}
                 </span>
               </button>
+            </div>
+
+            {/* Direct Silver-Coin Weapon Skill Upgrades (铁匠军械坊 · 随时花银两加技能) */}
+            <div className="tg-armory-strip" data-testid="tg-armory-strip">
+              <div className="tg-armory-header">
+                <span>🔨 铁匠军械坊（用杀敌掉落的 💰白银 直接给武器加点升级）：</span>
+              </div>
+              <div className="tg-armory-btns">
+                <button
+                  type="button"
+                  className="tg-armory-btn"
+                  data-testid="tg-upg-gunpowder"
+                  disabled={stones < gpCost}
+                  onClick={() => this.upgradeArmory('gunpowder')}
+                >
+                  <span className="tg-arm-title">🧨 火药扩容 Lv.{armory.gunpowder}</span>
+                  <span className="tg-arm-sub">炮伤+28% · 💰{gpCost}两</span>
+                </button>
+                <button
+                  type="button"
+                  className="tg-armory-btn"
+                  data-testid="tg-upg-mechanism"
+                  disabled={stones < mechCost}
+                  onClick={() => this.upgradeArmory('mechanism')}
+                >
+                  <span className="tg-arm-title">⚙️ 精钢机括 Lv.{armory.mechanism}</span>
+                  <span className="tg-arm-sub">装填+18% · 💰{mechCost}两</span>
+                </button>
+                <button
+                  type="button"
+                  className="tg-armory-btn"
+                  data-testid="tg-upg-barricade"
+                  disabled={stones < barCost}
+                  onClick={() => this.upgradeArmory('barricade')}
+                >
+                  <span className="tg-arm-title">🛡️ 铁壁拒马 Lv.{armory.barricade}</span>
+                  <span className="tg-arm-sub">城门+4血 · 💰{barCost}两</span>
+                </button>
+              </div>
             </div>
 
             {/* Selected Tower Tactical Bar */}
@@ -1756,17 +2140,20 @@ class TiangongTD extends Component {
                   <div className="tg-inspector-info">
                     <span className="tg-inspector-name">
                       【{selectedSpec.glyph} · {'★'.repeat(selectedTower.star)}】{selectedTier.name}
-                      {selectedMounted ? ' 🔥已激活【隔山架炮×1.8】' : ''}
+                      {selectedTower.type === 'pao' &&
+                        (selectedMounted
+                          ? ' 🎯【同列有炮架 · 仰射2倍开花炸弹】'
+                          : ' ⚫【前排无炮架 · 当前仅平射单发铁弹】')}
                     </span>
                     <span className="tg-inspector-desc">
                       {selectedTower.type === 'che' &&
-                        '玩法：自动劈同行同列！点发光十字格可【雷车冲刺】，或点右侧按钮释放十字轰击'}
+                        '规则：只向本列正前方发射破甲重箭（穿透3敌）！点发光车辙格可直线冲撞碾压'}
                       {selectedTower.type === 'pao' &&
-                        '玩法：前排有其他神将时伤害×1.8！点右侧【指哪打哪】再点棋盘即可发射三昧火海'}
+                        '规则：把【兵/車】摆在同一列正前方当炮架，炮口就会翻山抛射2倍开花炸弹！点右侧可定点炮击'}
                       {selectedTower.type === 'ma' &&
-                        '玩法：点击发光的“日”字格可发动【哮天跳斩】瞬移收割！'}
+                        '规则：周身挥砍斩马长刀！点击发光“日”字格可跃马跳劈'}
                       {(selectedTower.type === 'bing' || selectedTower.type === 'xiang') &&
-                        `${selectedSpec.role} · 点空位可换防，点同名同星棋子可合体升星`}
+                        `${selectedSpec.role} · ${selectedSpec.patternLabel}`}
                     </span>
                   </div>
 
@@ -1775,7 +2162,7 @@ class TiangongTD extends Component {
                       <button
                         type="button"
                         data-testid="tg-pao-bombard-btn"
-                        className={`tg-mini-btn active`}
+                        className="tg-mini-btn active"
                         onClick={() => {
                           if (cannonAimMode) {
                             this.triggerTowerTacticalSkill();
@@ -1784,7 +2171,7 @@ class TiangongTD extends Component {
                           }
                         }}
                       >
-                        {cannonAimMode ? '🔥 立即轰炸!' : '🎯 指哪打哪'}
+                        {cannonAimMode ? '💥 立即开炮!' : '🎯 定点炮击'}
                       </button>
                     ) : (
                       <button
@@ -1793,7 +2180,7 @@ class TiangongTD extends Component {
                         className="tg-mini-btn active"
                         onClick={() => this.triggerTowerTacticalSkill()}
                       >
-                        {selectedTower.type === 'che' ? '⚡ 十字雷暴' : '✦ 释放神技'}
+                        {selectedTower.type === 'che' ? '🛞 战车冲撞' : '⚔️ 战技突击'}
                       </button>
                     )}
 
@@ -1842,44 +2229,46 @@ class TiangongTD extends Component {
               className="tg-decree-modal tg-codex-box"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="tg-modal-kicker">✦ 30秒上手 · 仙界星盘兵法 ✦</div>
-              <h2 className="tg-modal-title">怎么操作？【車】与【炮】怎么玩？</h2>
+              <div className="tg-modal-kicker">✦ 真实军械规则 · 一眼看懂 ✦</div>
+              <h2 className="tg-modal-title">【炮】怎么架？杀敌得什么？怎么加技能？</h2>
 
               <div className="tg-codex-list">
                 <div className="tg-codex-item">
-                  <DeityChibi type="che" star={2} size={46} />
+                  <DeityChibi type="pao" star={2} size={48} hasMountBuff />
                   <div className="tg-codex-meta">
                     <div className="tg-codex-name">
-                      <span className="tg-codex-t3">⚡【車 · 雷震子】怎么玩：十字雷轨 + 雷车冲刺</span>
+                      <span className="tg-codex-t3">🧨【炮 · 红衣火炮】真实象棋“隔山打牛”规则</span>
                     </div>
                     <div className="tg-codex-ult">
-                      • <strong>十字贯穿</strong>：自动发射天雷劈穿<strong>同一行 + 同一列</strong>所有妖怪。<br />
-                      • <strong>互动操作</strong>：点选【車】后棋盘会亮起蓝色十字雷轨，点击十字轨上的空位即可发动<strong>【雷车冲刺】</strong>碾压整条线！
+                      • <strong>无炮架（平射实心铁弹）</strong>：正前方同列没有己方器械时，只平射黑色铁弹撞击最前排1名敌人。<br />
+                      • <strong>有炮架（仰射2倍开花炸弹）</strong>：在同一列正前方摆一尊【兵·铁盾】或【車·战车】当<strong>炮架</strong>，火炮自动抬高仰角，翻山抛射<strong>2倍伤害开花榴弹</strong>炸平一片！
                     </div>
                   </div>
                 </div>
 
                 <div className="tg-codex-item">
-                  <DeityChibi type="pao" star={2} size={46} hasMountBuff />
+                  <DeityChibi type="che" star={2} size={48} />
                   <div className="tg-codex-meta">
                     <div className="tg-codex-name">
-                      <span className="tg-codex-t3">🔥【炮 · 哪吒】怎么玩：隔山架炮 + 指哪打哪</span>
+                      <span className="tg-codex-t3">🛞【車 · 床弩战车】与【兵 · 铁盾拒马】</span>
                     </div>
                     <div className="tg-codex-ult">
-                      • <strong>隔山打牛（架炮）</strong>：把【炮】放在任意其他神将正后方（有前排当炮架），自动亮起<strong>🔥架炮×1.8</strong>，炮击伤害暴增 80%！<br />
-                      • <strong>指哪打哪（火海）</strong>：选中【炮】后点<strong>【🎯指哪打哪】</strong>再点棋盘任意位置，立即发射三昧火莲炸出一片持续烧怪的火海！
+                      • <strong>【車】纵向破甲重箭</strong>：只沿<strong>本列正前方</strong>发射实体重箭连续穿透3名敌人；点蓝色车辙格可直线碾压冲撞。<br />
+                      • <strong>【兵】重盾堵路</strong>：物理挡住本列敌兵脚步（减速85%）并用长枪突刺，是给后排火炮当【炮架】的绝配！
                     </div>
                   </div>
                 </div>
 
                 <div className="tg-codex-item">
-                  <DeityChibi type="ma" star={2} size={46} />
+                  <DeityChibi type="xiang" star={2} size={48} />
                   <div className="tg-codex-meta">
                     <div className="tg-codex-name">
-                      <span className="tg-codex-t3">🐎【馬/兵/相】与三合一化神</span>
+                      <span className="tg-codex-t3">💰 消灭多少人得什么？怎么加技能？</span>
                     </div>
                     <div className="tg-codex-ult">
-                      • <strong>募兵与合阵</strong>：有 40 仙灵石就点左下角红色<strong>【敕令募兵】</strong>；有两尊同名同星神将就点绿色<strong>【一键合阵】</strong>（1★→2★→3★觉醒全屏法天象地大招！）。
+                      • <strong>每消灭 1 名敌兵</strong>：立即掉落 <strong>💰14~28两白银</strong> + <strong>10%城炮火药</strong>。<br />
+                      • <strong>加技能方法 ①（随时加点）</strong>：在屏幕下方<strong>【🔨铁匠军械坊】</strong>直接花白银升级【火药扩容 / 精钢机括 / 铁壁拒马】。<br />
+                      • <strong>加技能方法 ②（杀敌授勋）</strong>：每累计消灭 <strong>8 名敌兵</strong>（以及每守住1波），上方亮起<strong>【🎁领新技能】</strong>，免费三选一改装全军器械！
                     </div>
                   </div>
                 </div>
